@@ -1,14 +1,20 @@
 package application;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -18,6 +24,7 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 
 import javafx.application.Application;
 import javafx.geometry.HPos;
@@ -28,6 +35,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
@@ -46,9 +54,12 @@ public class Main extends Application {
 	VBox homepageBox;
 	GridPane registerGrid;
 	GridPane loginGrid;
+	GridPane userGrid;
 
 	String btnTextColor = "#003366";
 	String bgColor = "#CCCCCC";
+
+	AES aesCipherForKey;
 
 //	List<Button> buttonList = new ArrayList<>();
 //	List<Label> pageTitles = new ArrayList<>();
@@ -65,41 +76,38 @@ public class Main extends Application {
 
 			// set pages layout
 			this.setHomePage();
+//			this.getKeyFromFile();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
 
-	private void connectToDatabase() {
+	private void handleMouseClick(MouseEvent event) {
+		if (event.getTarget() instanceof GridPane) {
+			root.requestFocus();
+		}
+	}
+
+	private void getKeyFromFile() throws NoSuchAlgorithmException {
+		aesCipherForKey = new AES();
+		CaesarCipher cc = new CaesarCipher();
+		String filePath = "kk.bin";
 		try {
-			// Register JDBC driver
-			Class.forName("com.mysql.cj.jdbc.Driver");
-			// Open a connection
-			System.out.println("Connecting to database...");
-			connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
-			// Execute a query
-			System.out.println("Creating statement...");
-			Statement statement = connection.createStatement();
-			String sql = "SELECT * FROM Users";
-
-			ResultSet resultSet = statement.executeQuery(sql);
-			// 1/ Go through the result set to print it
-			while (resultSet.next()) {
-				// Retrieve data by column name
-				String userName = resultSet.getString("userName");
-				String userPass = resultSet.getString("userPass");
-
-				System.out.println("userName: " + userName + " / userPass: " + userPass);
+			if (!Files.exists(Path.of(filePath))) {
+				Files.createFile(Path.of(filePath));
+				SecretKey secretkeyskey = aesCipherForKey.getSecretkey();
+				byte[] encryptedKeysKey = cc.binaryCipher(secretkeyskey.getEncoded());
+				Files.write(Path.of(filePath), encryptedKeysKey, StandardOpenOption.WRITE);
+				System.out.println("Data has been written to file: " + filePath);
+			} else {
+				byte[] encryptedKeysKey = Files.readAllBytes(Path.of(filePath));
+				byte[] decryptedKeysKey = cc.deBinaryCipher(encryptedKeysKey);
+				SecretKey secretkeyskey = new SecretKeySpec(decryptedKeysKey, 0, decryptedKeysKey.length, "AES");
+				aesCipherForKey.setSecretkey(secretkeyskey);
 			}
-			// Close external resources
-			resultSet.close();
-			statement.close();
-			connection.close();
-		} catch (ClassNotFoundException | SQLException e) {
-			// TODO Auto-generated catch block
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
-
 	}
 
 	// set buttons styles
@@ -128,6 +136,7 @@ public class Main extends Application {
 		loginButton.setOnAction(action -> {
 			this.setLoginPage();
 			root.setCenter(loginGrid);
+			root.requestFocus();
 		});
 
 		Button registerButton = new Button("Register");
@@ -135,7 +144,7 @@ public class Main extends Application {
 		registerButton.setOnAction(action -> {
 			this.setRegisterPage();
 			root.setCenter(registerGrid);
-			registerGrid.requestFocus();
+			root.requestFocus();
 		});
 
 		homepageBox.getChildren().addAll(homepageTitle, loginButton, registerButton);
@@ -144,17 +153,120 @@ public class Main extends Application {
 	}
 
 	private void setLoginPage() {
-		// TODO Auto-generated method stub
+		loginGrid = new GridPane();
+		loginGrid.setAlignment(Pos.CENTER);
+		loginGrid.setOnMouseClicked(this::handleMouseClick);
 
+		Label loginTitle = new Label("Login");
+		this.setTitleLabelStyle(loginTitle);
+		GridPane.setColumnSpan(loginTitle, 2);
+
+		Label usernameLable = new Label("Username: ");
+		TextField usernameTextField = new TextField();
+		Label usernameTip = new Label();
+		usernameTip.setWrapText(true);
+		usernameTip.setMaxWidth(200);
+		usernameTextField.focusedProperty().addListener((observable, oldValue, newValue) -> {
+			if (!newValue) {
+				if (usernameTextField.getText().trim().isEmpty()) {
+					usernameTip.setText("Username cannot be empty.");
+					usernameTip.setTextFill(Color.RED);
+				} else {
+					usernameTip.setText("");
+				}
+			}
+		});
+
+		Label passwordLable = new Label("Password: ");
+		PasswordField passwordField = new PasswordField();
+		Label passwordTip = new Label();
+		passwordTip.setWrapText(true);
+		passwordTip.setMaxWidth(200);
+		passwordField.focusedProperty().addListener((observable, oldValue, newValue) -> {
+			if (!newValue) {
+				if (passwordField.getText().trim().isEmpty()) {
+					passwordTip.setText("Password cannot be empty.");
+					passwordTip.setTextFill(Color.RED);
+				} else {
+					passwordTip.setText("");
+				}
+			}
+		});
+
+		Button loginButton = new Button("Login");
+		this.setButtonStyle(loginButton);
+		loginButton.setOnAction(action -> {
+			String usernameInput = usernameTextField.getText().trim();
+			String passwordInput = passwordField.getText().trim();
+			if (!usernameInput.isEmpty() && !passwordInput.isEmpty()) {
+				try {
+					try {
+						if (this.authenticateLogin(usernameInput, passwordInput)) {
+							this.setUserPage();
+							root.setCenter(userGrid);
+						} else {
+
+						}
+					} catch (InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException
+							| InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				} catch (ClassNotFoundException | SQLException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+
+			}
+		});
+
+		Button backButton = new Button("Back");
+		this.setButtonStyle(backButton);
+		backButton.setOnAction(action -> {
+			root.setCenter(homepageBox);
+			homepageBox.requestFocus();
+		});
+
+		GridPane.setColumnSpan(loginTitle, 2);
+		loginGrid.setVgap(4);
+		loginGrid.setHgap(10);
+		loginGrid.setPadding(new Insets(5, 5, 5, 5));
+		loginGrid.add(loginTitle, 0, 0);
+		loginGrid.add(usernameLable, 0, 2);
+		loginGrid.add(usernameTextField, 1, 2);
+		loginGrid.add(usernameTip, 1, 3);
+		loginGrid.add(passwordLable, 0, 4);
+		loginGrid.add(passwordField, 1, 4);
+		loginGrid.add(passwordTip, 1, 5);
+		loginGrid.add(loginButton, 0, 6);
+		loginGrid.add(backButton, 1, 6);
+
+		ColumnConstraints columnConstraints = new ColumnConstraints();
+		columnConstraints.setHalignment(HPos.CENTER);
+		loginGrid.getColumnConstraints().add(columnConstraints);
+	}
+
+	private void setUserPage() {
+		userGrid = new GridPane();
+		userGrid.setAlignment(Pos.CENTER);
+		userGrid.setOnMouseClicked(this::handleMouseClick);
+		Label userTitle = new Label("Login successfully!");
+		this.setTitleLabelStyle(userTitle);
+
+		GridPane.setColumnSpan(userTitle, 2);
+		userGrid.setVgap(4);
+		userGrid.setHgap(10);
+		userGrid.setPadding(new Insets(5, 5, 5, 5));
+		userGrid.add(userTitle, 0, 0);
 	}
 
 	private void setRegisterPage() {
 		registerGrid = new GridPane();
 		registerGrid.setAlignment(Pos.CENTER);
+		registerGrid.setOnMouseClicked(this::handleMouseClick);
 
 		Label registerTitle = new Label("Create your account");
 		this.setTitleLabelStyle(registerTitle);
-		GridPane.setColumnSpan(registerTitle, 2);
 
 		Label usernameLable = new Label("Username: ");
 		TextField usernameTextField = new TextField();
@@ -211,9 +323,10 @@ public class Main extends Application {
 			}
 		});
 
+		Label submitTip = new Label();
 		Button sumbitButton = new Button("Submit");
+		this.setButtonStyle(sumbitButton);
 		sumbitButton.setOnAction(action -> {
-			Label submitTip = new Label();
 			GridPane.setColumnSpan(submitTip, 2);
 			String usernameInput = usernameTextField.getText().trim();
 			String passwordInput = passwordField.getText().trim();
@@ -237,20 +350,18 @@ public class Main extends Application {
 						}
 					} else {
 						submitTip.setText("Please confirm the password before submit");
-						registerGrid.add(submitTip, 0, 7);
 					}
 				} else {
 					submitTip.setText("Please enter a valid password before submit");
-					registerGrid.add(submitTip, 0, 7);
 				}
 			} else {
 				submitTip.setText("Please enter a valid username before submit");
-				registerGrid.add(submitTip, 0, 7);
 			}
 
 		});
 
 		Button backButton = new Button("Back");
+		this.setButtonStyle(backButton);
 		backButton.setOnAction(action -> {
 			root.setCenter(homepageBox);
 			homepageBox.requestFocus();
@@ -261,21 +372,88 @@ public class Main extends Application {
 		registerGrid.setHgap(10);
 		registerGrid.setPadding(new Insets(5, 5, 5, 5));
 		registerGrid.add(registerTitle, 0, 0);
-		registerGrid.add(usernameLable, 0, 1);
-		registerGrid.add(usernameTextField, 1, 1);
-		registerGrid.add(usernameTip, 1, 2);
-		registerGrid.add(passwordLable, 0, 3);
-		registerGrid.add(passwordField, 1, 3);
-		registerGrid.add(passwordTip, 1, 4);
-		registerGrid.add(confirmPasswordLable, 0, 5);
-		registerGrid.add(confirmPasswordField, 1, 5);
-		registerGrid.add(confirmPasswordTip, 1, 6);
-		registerGrid.add(sumbitButton, 0, 8);
-		registerGrid.add(backButton, 1, 8);
+		registerGrid.add(usernameLable, 0, 2);
+		registerGrid.add(usernameTextField, 1, 2);
+		registerGrid.add(usernameTip, 1, 3);
+		registerGrid.add(passwordLable, 0, 4);
+		registerGrid.add(passwordField, 1, 4);
+		registerGrid.add(passwordTip, 1, 5);
+		registerGrid.add(confirmPasswordLable, 0, 6);
+		registerGrid.add(confirmPasswordField, 1, 6);
+		registerGrid.add(confirmPasswordTip, 1, 7);
+		registerGrid.add(submitTip, 0, 8);
+		registerGrid.add(sumbitButton, 0, 9);
+		registerGrid.add(backButton, 1, 9);
 
 		ColumnConstraints columnConstraints = new ColumnConstraints();
 		columnConstraints.setHalignment(HPos.CENTER);
 		registerGrid.getColumnConstraints().add(columnConstraints);
+	}
+
+	private boolean authenticateLogin(String usernameInput, String passwordInput)
+			throws ClassNotFoundException, SQLException, InvalidKeyException, NoSuchAlgorithmException,
+			NoSuchPaddingException, InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
+		// Register JDBC driver
+		Class.forName("com.mysql.cj.jdbc.Driver");
+		// Open a connection
+		System.out.println("Connecting to database...");
+		connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
+		// Execute a query
+
+		byte[] passphrase = this.getPassphrase();
+
+		// for test
+		System.out.println("Checking username..." + usernameInput);
+//		`user_id`, `user_password`, `user_key`
+
+		String sql = "SELECT user_id, AES_DECRYPT(user_name, ?) AS decrypted_username, user_password, user_key FROM users_info WHERE user_name = AES_ENCRYPT(?, ?);";
+		System.out.println("Creating prepared statement...");
+		PreparedStatement preparedStatement = connection.prepareStatement(sql);
+		preparedStatement.setBytes(1, passphrase);
+		preparedStatement.setString(2, usernameInput);
+		preparedStatement.setBytes(3, passphrase);
+		ResultSet resultSet = preparedStatement.executeQuery();
+
+		// for test
+//		System.out.println("resultnext..." + resultSet.next());
+		while (resultSet.next()) {
+			System.out.println("get data...");
+			int id = resultSet.getInt("user_id");
+			String username = resultSet.getString("decrypted_username");
+			byte[] encryptedPassword = resultSet.getBytes("user_password");
+			byte[] encryptedKey = resultSet.getBytes("user_key");
+
+			// for test
+			System.out.println("id..." + id);
+			System.out.println("username" + username);
+
+			if (this.checkPassword(passwordInput, encryptedPassword, encryptedKey)) {
+				return true;
+			}
+
+		}
+		// Close external resources
+		resultSet.close();
+		preparedStatement.close();
+		connection.close();
+		return false;
+	}
+
+	private boolean checkPassword(String passwordInput, byte[] encryptedPassword, byte[] encryptedKey)
+			throws NoSuchAlgorithmException, InvalidKeyException, NoSuchPaddingException,
+			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
+		this.getKeyFromFile();
+		SecretKey secretKey = aesCipherForKey.decryptedKey(encryptedKey);
+
+		DES des = new DES();
+		des.setSecretkey(secretKey);
+
+		String hashedPassword = des.decrypt(encryptedPassword);
+		String hashedPasswordInput = this.hashPassword(passwordInput);
+		if (hashedPassword.equals(hashedPasswordInput)) {
+			return true;
+		}
+		return false;
 	}
 
 	private void processRegistrationInfo(String usernameInput, String passwordInput)
@@ -291,37 +469,10 @@ public class Main extends Application {
 				"The DES encrypted message 64: " + Base64.getEncoder().encodeToString(encryptedHashedPassword));
 
 		SecretKey secretkey = des.getSecretkey();
-		AES aes = new AES();
-		byte[] encryptedKey = aes.encryptedKey(secretkey);
-		SecretKey secretkeyskey = aes.getSecretkey();
+		this.getKeyFromFile();
+		byte[] encryptedKey = aesCipherForKey.encryptedKey(secretkey);
 
 		this.sumbitRegistrationToDB(usernameInput, encryptedHashedPassword, encryptedKey);
-	}
-
-	private String encryptedDESText(String plainStr) {
-		try {
-			DES des = new DES();
-			byte[] encText = des.encryptString(plainStr);
-			System.out.println("The DES encrypted message 64: " + Base64.getEncoder().encodeToString(encText));
-			return Base64.getEncoder().encodeToString(encText);
-
-		} catch (Exception e) {
-			System.out.println("Error in DES: " + e);
-			e.printStackTrace();
-			return null;
-		}
-
-	}
-
-	private void decryptDES(byte[] encryptedText, String encodedKey)
-			throws NoSuchAlgorithmException, InvalidKeyException, NoSuchPaddingException,
-			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
-		DES des = new DES();
-		byte[] decodedKey = Base64.getDecoder().decode(encodedKey);
-		des.setSecretkey(des.stringToSecretKey(encodedKey));
-
-		String decText = des.decrypt(encryptedText);
-		System.out.println("The DES decrypted message: " + decText);
 	}
 
 	private void sumbitRegistrationToDB(String username, byte[] password, byte[] key) {
@@ -332,30 +483,56 @@ public class Main extends Application {
 			System.out.println("Connecting to database...");
 			connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
 			// Execute a query
-			System.out.println("Creating statement...");
-			Statement statement = connection.createStatement();
-			String passphrase = null;
-			String sql = "INSERT INTO `users_info` (`user_name`, `user_password`)\n" + "VALUES ( AES_ENCRYPT(\""
-					+ passphrase + "\",\"" + username + "\" ), );";
+			byte[] passphrase = this.getPassphrase();
+			String sql = "INSERT INTO users_info (user_name, user_password, user_key) VALUES (AES_ENCRYPT(?, ?), ?, ?)";
+			System.out.println("Creating prepared statement...");
+			PreparedStatement preparedStatement = connection.prepareStatement(sql);
+			preparedStatement.setString(1, username);
+			preparedStatement.setBytes(2, passphrase);
+			preparedStatement.setBytes(3, password);
+			preparedStatement.setBytes(4, key);
+			preparedStatement.executeUpdate();
 
-			ResultSet resultSet = statement.executeQuery(sql);
-			// 1/ Go through the result set to print it
-			while (resultSet.next()) {
-				// Retrieve data by column name
-				String userName = resultSet.getString("userName");
-				String userPass = resultSet.getString("userPass");
+			Label registeredMessage = new Label("Your account has been created successfully!");
+			registeredMessage.setStyle("-fx-font-size: 16px; " + "-fx-font-family: 'Arial'; " + "-fx-text-fill: green; "
+					+ "-fx-font-weight: bold;");
+			homepageBox.getChildren().add(registeredMessage);
+			root.setCenter(homepageBox);
 
-				System.out.println("userName: " + userName + " / userPass: " + userPass);
-			}
-			// Close external resources
-			resultSet.close();
-			statement.close();
+//			String sql = "INSERT INTO `users_info` (`user_name`, `user_password`, `user_key`)\n"
+//					+ "VALUES ( AES_ENCRYPT(\"" + passphrase + "\",\"" + username + "\" ), \"" + password + "\", \""
+//					+ key + "\"));";
+			preparedStatement.close();
 			connection.close();
 		} catch (ClassNotFoundException | SQLException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
+	}
+
+	private byte[] getPassphrase() {
+		CaesarCipher cc = new CaesarCipher();
+		String filePath = "pp.bin";
+		try {
+			if (!Files.exists(Path.of(filePath))) {
+				Files.createFile(Path.of(filePath));
+				SecureRandom secureRandom = new SecureRandom();
+				byte[] randomPassBytes = new byte[16];
+				secureRandom.nextBytes(randomPassBytes);
+				byte[] encryptedPassBytes = cc.binaryCipher(randomPassBytes);
+				Files.write(Path.of(filePath), encryptedPassBytes, StandardOpenOption.WRITE);
+				System.out.println("Data has been written to file: " + filePath);
+				return randomPassBytes;
+			} else {
+				byte[] encryptedPassBytes = Files.readAllBytes(Path.of(filePath));
+				byte[] decryptedPassBytes = cc.deBinaryCipher(encryptedPassBytes);
+				return decryptedPassBytes;
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+			return null;
+		}
 	}
 
 	private String hashPassword(String plainPassword) {
@@ -376,10 +553,6 @@ public class Main extends Application {
 			return null;
 		}
 
-	}
-
-	private boolean checkPassword(String plainPassword, String hashedPassword) {
-		return hashedPassword.equals(hashPassword(plainPassword));
 	}
 
 	private String confrimPasswordValidity(String confirmPassword, String password) {
@@ -416,7 +589,7 @@ public class Main extends Application {
 			tipText = "Username cannot be empty. A valid username use only letters, numbers, or symbols (@, ., -, _), and have a length between 6 and 8 characters.";
 		} else if (!newUsername.matches(regex)) {
 			tipText = "Invalid username. A valid username use only letters, numbers, or symbols (@, ., -, _), and have a length between 6 and 8 characters.";
-		} else if (this.dbUsernameTaken(newUsername)) {
+		} else if (!this.dbUsernameTaken(newUsername)) {
 			tipText = "This username is already in use. A valid username use only letters, numbers, or symbols (@, ., -, _), and have a length between 6 and 8 characters.";
 		} else {
 			tipText = "Username is valid";
@@ -434,11 +607,17 @@ public class Main extends Application {
 			// Execute a query
 			System.out.println("Creating statement...");
 			Statement statement = connection.createStatement();
-			String sql = "SELECT * FROM users_info where user_name = \"" + newUsername + "\"";
+			byte[] passphrase = this.getPassphrase();
+
+			// for test
+			System.out.println("Checking username..." + newUsername);
+			String sql = "SELECT * FROM `users_info` WHERE AES_DECRYPT(`user_name`, \"" + passphrase + "\") = \""
+					+ newUsername + "\";";
 
 			ResultSet resultSet = statement.executeQuery(sql);
+
 			if (resultSet.next()) {
-				return true;
+				return false;
 			}
 			// Close external resources
 			resultSet.close();
@@ -448,9 +627,12 @@ public class Main extends Application {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-
-		return false;
+		return true;
 	}
+
+//	private boolean checkPassword(String plainPassword, String hashedPassword) {
+//		return hashedPassword.equals(hashPassword(plainPassword));
+//	}
 
 	private void encryptRSA() {
 		try {
@@ -476,6 +658,32 @@ public class Main extends Application {
 			e.printStackTrace();
 		}
 
+	}
+
+	private String encryptedDESText(String plainStr) {
+		try {
+			DES des = new DES();
+			byte[] encText = des.encryptString(plainStr);
+			System.out.println("The DES encrypted message 64: " + Base64.getEncoder().encodeToString(encText));
+			return Base64.getEncoder().encodeToString(encText);
+
+		} catch (Exception e) {
+			System.out.println("Error in DES: " + e);
+			e.printStackTrace();
+			return null;
+		}
+
+	}
+
+	private void decryptDES(byte[] encryptedText, String encodedKey)
+			throws NoSuchAlgorithmException, InvalidKeyException, NoSuchPaddingException,
+			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
+		DES des = new DES();
+		byte[] decodedKey = Base64.getDecoder().decode(encodedKey);
+		des.setSecretkey(des.stringToSecretKey(encodedKey));
+
+		String decText = des.decrypt(encryptedText);
+		System.out.println("The DES decrypted message: " + decText);
 	}
 
 	public static void main(String[] args) {

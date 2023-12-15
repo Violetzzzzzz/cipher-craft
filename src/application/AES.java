@@ -59,6 +59,16 @@ public class AES {
 		return byteCipherText;
 	}
 
+	public SecretKey decryptedKey(byte[] encryptedKey) throws NoSuchAlgorithmException, NoSuchPaddingException,
+			InvalidKeyException, InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
+		Cipher aesCipher = Cipher.getInstance("AES"); // Must specify the mode explicitly as most JCE providers default
+														// to ECB mode!!
+		aesCipher.init(Cipher.DECRYPT_MODE, this.getSecretkey());
+		byte[] decryptedKeyText = aesCipher.doFinal(encryptedKey);
+		SecretKey secretKey = new SecretKeySpec(decryptedKeyText, 0, decryptedKeyText.length, "DES");
+		return secretKey;
+	}
+
 	/**
 	 * @return the secretkey
 	 */
