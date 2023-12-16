@@ -1,6 +1,5 @@
 package application;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,8 +8,6 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
-import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -27,34 +24,63 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
 import javafx.application.Application;
+import javafx.collections.FXCollections;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TextFormatter;
+import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.RowConstraints;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 public class Main extends Application {
 	static final String JDBC_URL = "jdbc:mysql://database-violetsassignment.cwiyapmmjmbk.ap-southeast-2.rds.amazonaws.com:3306/db_assignment";
 	static final String USERNAME = "admin";
 	static final String PASSWORD = "qazxswedc";
-	Connection connection;
-
-	BorderPane root;
+//	Connection connection;
+	User user;
+	Stage primaryStage;
+	Stage alertStage;
+	Scene scene;
+	Scene userScene;
+	Scene alertScene;
+	BorderPane root = new BorderPane();
+	BorderPane userroot = new BorderPane();
+	BorderPane alertroot = new BorderPane();
 
 	VBox homepageBox;
 	GridPane registerGrid;
 	GridPane loginGrid;
 	GridPane userGrid;
+	ListView<UserText> textTitleListView = new ListView<>();
+	Label userPageSubtitleTitle;
+	HBox pageFocusBox;
+	Label userTitle;
+
+	CaesarCipher cc;
+	UserText userTextInDisplay;
+	String currentCipher;
+	String textNameForSaving;
+	String cipherTextForSaving;
 
 	String btnTextColor = "#003366";
 	String bgColor = "#CCCCCC";
@@ -67,8 +93,8 @@ public class Main extends Application {
 	@Override
 	public void start(Stage primaryStage) {
 		try {
-			root = new BorderPane();
-			Scene scene = new Scene(root, 640, 480);
+			this.primaryStage = primaryStage;
+			scene = new Scene(root, 600, 450);
 			scene.getStylesheets().add(getClass().getResource("application.css").toExternalForm());
 			primaryStage.setTitle("CipherCraft");
 			primaryStage.setScene(scene);
@@ -76,57 +102,56 @@ public class Main extends Application {
 
 			// set pages layout
 			this.setHomePage();
-//			this.getKeyFromFile();
+			this.setAlertStage();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
 
+	private void setAlertStage() {
+		alertStage = new Stage();
+		alertStage.setAlwaysOnTop(true);
+		alertStage.setTitle("Alert");
+		alertScene = new Scene(alertroot, 200, 150);
+		alertStage.setScene(alertScene);
+		alertStage.initModality(Modality.APPLICATION_MODAL);
+	}
+
 	private void handleMouseClick(MouseEvent event) {
 		if (event.getTarget() instanceof GridPane) {
 			root.requestFocus();
-		}
-	}
-
-	private void getKeyFromFile() throws NoSuchAlgorithmException {
-		aesCipherForKey = new AES();
-		CaesarCipher cc = new CaesarCipher();
-		String filePath = "kk.bin";
-		try {
-			if (!Files.exists(Path.of(filePath))) {
-				Files.createFile(Path.of(filePath));
-				SecretKey secretkeyskey = aesCipherForKey.getSecretkey();
-				byte[] encryptedKeysKey = cc.binaryCipher(secretkeyskey.getEncoded());
-				Files.write(Path.of(filePath), encryptedKeysKey, StandardOpenOption.WRITE);
-				System.out.println("Data has been written to file: " + filePath);
-			} else {
-				byte[] encryptedKeysKey = Files.readAllBytes(Path.of(filePath));
-				byte[] decryptedKeysKey = cc.deBinaryCipher(encryptedKeysKey);
-				SecretKey secretkeyskey = new SecretKeySpec(decryptedKeysKey, 0, decryptedKeysKey.length, "AES");
-				aesCipherForKey.setSecretkey(secretkeyskey);
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
+			userroot.requestFocus();
 		}
 	}
 
 	// set buttons styles
 	private void setButtonStyle(Button btn) {
 		btn.setStyle("-fx-border-width: 1px; " + "-fx-border-color: " + btnTextColor + "; " + "-fx-border-radius: 4px;"
-				+ "-fx-padding: 2px 6px;" + "-fx-font-size: 16px;" + "-fx-text-fill: " + btnTextColor + ";"
+				+ "-fx-padding: 4px 8px;" + "-fx-font-size: 16px;" + "-fx-text-fill: " + btnTextColor + ";"
 				+ "-fx-font-family: 'Arial';" + "-fx-opacity: 0.7; ");
+		btn.setWrapText(true);
 
 	}
 
 	private void setTitleLabelStyle(Label lb) {
-		lb.setStyle("-fx-font-size: 20px; " + "-fx-font-family: 'Arial'; " + "-fx-text-fill: blue; "
+		lb.setStyle("-fx-font-size: 24px; " + "-fx-font-family: 'Arial'; " + "-fx-text-fill: blue; "
 				+ "-fx-font-weight: bold;");
+		lb.setWrapText(true);
+	}
+
+	private void setBodyLabelStyle(Label lb) {
+		lb.setStyle("-fx-font-size: 16px; " + "-fx-font-family: 'Arial'; " + "-fx-text-fill: black; ");
+		lb.setWrapText(true);
+	}
+
+	private void setLayoutBorderStyle(Node layout) {
+//		layout.setStyle("-fx-border-color: black; -fx-border-width: 0 0 2 0;");
 	}
 
 	private void setHomePage() {
 		homepageBox = new VBox();
 		homepageBox.setAlignment(Pos.CENTER);
-		homepageBox.setSpacing(10);
+		homepageBox.setSpacing(20);
 
 		Label homepageTitle = new Label("Welcome to CipherCraft");
 		this.setTitleLabelStyle(homepageTitle);
@@ -162,6 +187,7 @@ public class Main extends Application {
 		GridPane.setColumnSpan(loginTitle, 2);
 
 		Label usernameLable = new Label("Username: ");
+		this.setBodyLabelStyle(usernameLable);
 		TextField usernameTextField = new TextField();
 		Label usernameTip = new Label();
 		usernameTip.setWrapText(true);
@@ -178,6 +204,7 @@ public class Main extends Application {
 		});
 
 		Label passwordLable = new Label("Password: ");
+		this.setBodyLabelStyle(passwordLable);
 		PasswordField passwordField = new PasswordField();
 		Label passwordTip = new Label();
 		passwordTip.setWrapText(true);
@@ -193,6 +220,14 @@ public class Main extends Application {
 			}
 		});
 
+		// for easy test
+		usernameTextField.setText("violetz");
+		passwordField.setText("Abc123@@");
+
+		Label loginTip = new Label();
+		loginTip.setWrapText(true);
+		loginTip.setMaxWidth(220);
+
 		Button loginButton = new Button("Login");
 		this.setButtonStyle(loginButton);
 		loginButton.setOnAction(action -> {
@@ -203,9 +238,16 @@ public class Main extends Application {
 					try {
 						if (this.authenticateLogin(usernameInput, passwordInput)) {
 							this.setUserPage();
-							root.setCenter(userGrid);
+							userroot.setCenter(userGrid);
+							if (userScene == null) {
+								userScene = new Scene(userroot, 1200, 800);
+							}
+							this.primaryStage.setScene(userScene);
+							textTitleListView.getItems().clear();
+							this.loadUserSavedTextTitleList();
 						} else {
-
+							loginTip.setText("Username and password don't match. \nPlease try again.");
+							loginTip.setTextFill(Color.RED);
 						}
 					} catch (InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException
 							| InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
@@ -228,6 +270,7 @@ public class Main extends Application {
 		});
 
 		GridPane.setColumnSpan(loginTitle, 2);
+		GridPane.setColumnSpan(loginTip, 2);
 		loginGrid.setVgap(4);
 		loginGrid.setHgap(10);
 		loginGrid.setPadding(new Insets(5, 5, 5, 5));
@@ -238,26 +281,13 @@ public class Main extends Application {
 		loginGrid.add(passwordLable, 0, 4);
 		loginGrid.add(passwordField, 1, 4);
 		loginGrid.add(passwordTip, 1, 5);
-		loginGrid.add(loginButton, 0, 6);
-		loginGrid.add(backButton, 1, 6);
+		loginGrid.add(loginTip, 0, 6);
+		loginGrid.add(loginButton, 0, 7);
+		loginGrid.add(backButton, 1, 7);
 
 		ColumnConstraints columnConstraints = new ColumnConstraints();
 		columnConstraints.setHalignment(HPos.CENTER);
 		loginGrid.getColumnConstraints().add(columnConstraints);
-	}
-
-	private void setUserPage() {
-		userGrid = new GridPane();
-		userGrid.setAlignment(Pos.CENTER);
-		userGrid.setOnMouseClicked(this::handleMouseClick);
-		Label userTitle = new Label("Login successfully!");
-		this.setTitleLabelStyle(userTitle);
-
-		GridPane.setColumnSpan(userTitle, 2);
-		userGrid.setVgap(4);
-		userGrid.setHgap(10);
-		userGrid.setPadding(new Insets(5, 5, 5, 5));
-		userGrid.add(userTitle, 0, 0);
 	}
 
 	private void setRegisterPage() {
@@ -390,6 +420,427 @@ public class Main extends Application {
 		registerGrid.getColumnConstraints().add(columnConstraints);
 	}
 
+	private void setUserPage() {
+		userGrid = new GridPane();
+		userGrid.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+		userGrid.setPrefSize(Double.MAX_VALUE, Double.MAX_VALUE);
+		userGrid.setAlignment(Pos.CENTER);
+		userGrid.setOnMouseClicked(this::handleMouseClick);
+
+		userTitle = new Label("Login successfully. Welcome " + user.getName() + " :)");
+		this.setTitleLabelStyle(userTitle);
+
+		Button settingButton = new Button("Settings");
+		this.setButtonStyle(settingButton);
+
+		Button logoutButton = new Button("Log out");
+		this.setButtonStyle(logoutButton);
+		logoutButton.setOnAction(action -> {
+			root.setCenter(homepageBox);
+			homepageBox.requestFocus();
+			user = null;
+			this.primaryStage.setScene(scene);
+		});
+
+		Button newTextButton = new Button("New Text");
+		this.setButtonStyle(newTextButton);
+
+		Button fileTextButton = new Button("Load Text From File");
+		this.setButtonStyle(fileTextButton);
+
+		Label listviewTitle = new Label("Your Texts: ");
+		this.setBodyLabelStyle(listviewTitle);
+		textTitleListView.setMaxWidth(140);
+		textTitleListView.setPrefHeight(470);
+
+		this.userPageSubtitleTitle = new Label("Start with New Text or Choose One From Sidebar");
+		this.userPageSubtitleTitle.setStyle("-fx-font-size: 20px; " + "-fx-font-family: 'Arial'; "
+				+ "-fx-text-fill: blue; " + "-fx-font-weight: bold;");
+
+		TextField textTitleField = new TextField();
+		textTitleField.setMaxWidth(200);
+
+		Label plainTextTitle = new Label("Plain Text: ");
+		plainTextTitle.setWrapText(true);
+		plainTextTitle.setMaxWidth(420);
+		this.setBodyLabelStyle(plainTextTitle);
+
+		TextArea plainTextArea = new TextArea();
+		plainTextArea.setWrapText(true);
+		plainTextArea.setMaxWidth(420);
+		plainTextArea.setPrefHeight(400);
+
+		Label cipherTextTitle = new Label("Cipher Text: ");
+		cipherTextTitle.setWrapText(true);
+		cipherTextTitle.setMaxWidth(420);
+		this.setBodyLabelStyle(cipherTextTitle);
+
+		TextArea cipherTextArea = new TextArea();
+		cipherTextArea.setWrapText(true);
+		cipherTextArea.setMaxWidth(420);
+		cipherTextArea.setEditable(false);
+		cipherTextArea.setPrefHeight(400);
+
+		Label caesarKeyLabel = new Label("CaeserCipher Key: ");
+		caesarKeyLabel.setWrapText(true);
+		caesarKeyLabel.setMaxWidth(140);
+		caesarKeyLabel.setVisible(false);
+		this.setBodyLabelStyle(caesarKeyLabel);
+
+		TextField caesarKeyField = new TextField();
+		caesarKeyField.setVisible(false);
+		caesarKeyField.setMaxWidth(140);
+		caesarKeyField.setPromptText("Enter a number");
+		caesarKeyField.setTextFormatter(new TextFormatter<>(change -> {
+			if (change.getControlNewText().matches("\\d{0,4}")) {
+				return change;
+			} else {
+				return null;
+			}
+		}));
+
+		Label cipherTypeLabel = new Label("Choose Cipher Type:");
+		cipherTypeLabel.setWrapText(true);
+		cipherTypeLabel.setMaxWidth(140);
+		this.setBodyLabelStyle(cipherTypeLabel);
+
+		ComboBox<String> cipherDropDown = new ComboBox<>();
+		cipherDropDown.setItems(FXCollections.observableArrayList("CaesarCipher", "DES", "AES", "RSA"));
+		cipherDropDown.setPrefWidth(140);
+		cipherDropDown.setValue(user.getPreferCipher());
+		cipherDropDown.setOnAction(event -> {
+			String selectedOption = cipherDropDown.getValue();
+			System.out.println("Selected option: " + selectedOption);
+			if (selectedOption.equals("CaesarCipher")) {
+				caesarKeyLabel.setVisible(true);
+				caesarKeyField.setVisible(true);
+				caesarKeyField.setEditable(true);
+			} else {
+				caesarKeyLabel.setVisible(false);
+				caesarKeyField.setVisible(false);
+			}
+		});
+
+		Button encryptButton = new Button("Encrypt ->");
+		this.setButtonStyle(encryptButton);
+		encryptButton.setPrefWidth(140);
+		Button decryptButton = new Button("<- Decrypt");
+		this.setButtonStyle(decryptButton);
+		decryptButton.setPrefWidth(140);
+
+		Label errorMessage = new Label();
+		errorMessage.setMaxWidth(140);
+		errorMessage.setWrapText(true);
+		errorMessage.setTextFill(Color.RED);
+
+		Button saveButton = new Button("Save Cipher Text to Database");
+		this.setButtonStyle(saveButton);
+		Button exportCipherTextButton = new Button("Export Cipher Text to File");
+		this.setButtonStyle(exportCipherTextButton);
+		exportCipherTextButton.setMinWidth(200);
+		Button exportPlainTextButton = new Button("Export Plain Text to File");
+		this.setButtonStyle(exportPlainTextButton);
+
+		HBox headerButtonsBox = new HBox(12);
+		headerButtonsBox.setAlignment(Pos.CENTER);
+		headerButtonsBox.getChildren().addAll(newTextButton, fileTextButton, saveButton, exportPlainTextButton,
+				exportCipherTextButton, settingButton, logoutButton);
+		this.setLayoutBorderStyle(headerButtonsBox);
+		headerButtonsBox.setStyle("-fx-border-color: black; -fx-border-width: 0 0 2 0;");
+
+		VBox listviewBox = new VBox(10);
+		listviewBox.setAlignment(Pos.CENTER);
+		listviewBox.getChildren().addAll(listviewTitle, textTitleListView);
+		this.setLayoutBorderStyle(listviewBox);
+
+		HBox subtitleBox = new HBox(12);
+		subtitleBox.setAlignment(Pos.CENTER);
+		subtitleBox.getChildren().addAll(userPageSubtitleTitle);
+		this.setLayoutBorderStyle(subtitleBox);
+
+		VBox plainTextBox = new VBox(10);
+		plainTextBox.setAlignment(Pos.CENTER);
+		plainTextBox.getChildren().addAll(plainTextTitle, plainTextArea);
+		this.setLayoutBorderStyle(plainTextBox);
+
+		VBox cipherTextBox = new VBox(10);
+		cipherTextBox.setAlignment(Pos.CENTER);
+		cipherTextBox.getChildren().addAll(cipherTextTitle, cipherTextArea);
+		this.setLayoutBorderStyle(cipherTextBox);
+
+		VBox cipherControlsBox = new VBox(10);
+		cipherControlsBox.setAlignment(Pos.CENTER);
+		cipherControlsBox.getChildren().addAll(cipherTypeLabel, cipherDropDown, caesarKeyLabel, caesarKeyField,
+				encryptButton, decryptButton);
+		this.setLayoutBorderStyle(cipherControlsBox);
+
+		this.pageFocusBox = new HBox(10);
+		this.pageFocusBox.setAlignment(Pos.CENTER);
+		this.pageFocusBox.getChildren().addAll(plainTextBox, cipherControlsBox, cipherTextBox);
+		this.setLayoutBorderStyle(pageFocusBox);
+
+		this.pageFocusBox.setVisible(false);
+
+		newTextButton.setOnAction(action -> {
+			userTitle.setText("Hi " + user.getName() + ". Encrypt and Decrypt New Text");
+			pageFocusBox.setVisible(true);
+			userPageSubtitleTitle.setText("Text Title: ");
+			subtitleBox.getChildren().add(textTitleField);
+			userTextInDisplay = null;
+		});
+
+		encryptButton.setOnAction(action -> {
+			String selectedCipherOption = cipherDropDown.getValue();
+			if (plainTextArea.getText().trim().isEmpty()) {
+				errorMessage.setText("Plain textarea cannot be empty");
+				alertroot.setCenter(errorMessage);
+				alertStage.show();
+			} else {
+				if (selectedCipherOption.equals("CaesarCipher")) {
+					String keyString = caesarKeyField.getText().trim();
+					if (keyString.isEmpty()) {
+						errorMessage.setText("Please enter a numeric key");
+						alertroot.setCenter(errorMessage);
+						alertStage.show();
+					} else {
+						String plainText = plainTextArea.getText().trim();
+						int key = Integer.parseInt(keyString);
+						cc = new CaesarCipher(key);
+						String cipherText = cc.encryptString(plainText, key);
+						cipherTextArea.setText(cipherText);
+						currentCipher = "CaesarCipher";
+					}
+				}
+			}
+		});
+
+		decryptButton.setOnAction(action -> {
+			String cipherText = cipherTextArea.getText().trim();
+			if (!cipherText.isEmpty()) {
+				if (currentCipher.equals("CaesarCipher")) {
+					String plainText = cc.decryptString(cipherText, cc.getKey());
+					plainTextArea.setText(plainText);
+				} else if (currentCipher.equals("AES")) {
+
+				} else if (currentCipher.equals("DES")) {
+
+				} else if (currentCipher.equals("RSA")) {
+
+				} else {
+					errorMessage.setText("Can't recognize cipher type.");
+					alertroot.setCenter(errorMessage);
+					alertStage.show();
+					System.out.println("Lost current cipher type..." + currentCipher);
+				}
+			}
+		});
+
+		saveButton.setOnAction(action -> {
+			String cipherText = cipherTextArea.getText().trim();
+			if (!cipherText.isEmpty()) {
+				String textTitle = textTitleField.getText().trim();
+				if (!textTitle.isEmpty()) {
+					if (currentCipher.equals("CaesarCipher")) {
+						try {
+							this.saveCaesarCipherTextToDB(cipherText, textTitle);
+							subtitleBox.getChildren().remove(textTitleField);
+							cipherTextArea.clear();
+							plainTextArea.clear();
+							caesarKeyField.clear();
+							cipherDropDown.setValue(user.getPreferCipher());
+							textTitleField.clear();
+							userTitle.setText("Hi " + user.getName());
+						} catch (InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException
+								| InvalidAlgorithmParameterException | IllegalBlockSizeException
+								| BadPaddingException e) {
+							// TODO Auto-generated catch block
+							subtitleBox.getChildren().add(textTitleField);
+							e.printStackTrace();
+						}
+					} else if (currentCipher.equals("AES")) {
+
+					} else if (currentCipher.equals("DES")) {
+
+					} else if (currentCipher.equals("RSA")) {
+
+					} else {
+						errorMessage.setText("Can't recognize cipher type.");
+						alertroot.setCenter(errorMessage);
+						alertStage.show();
+						System.out.println("Lost current cipher type..." + currentCipher);
+					}
+				} else {
+					errorMessage.setText("Text title cannot be empty");
+					alertroot.setCenter(errorMessage);
+					alertStage.show();
+				}
+			} else {
+				errorMessage.setText("Plain textarea cannot be empty");
+				alertroot.setCenter(errorMessage);
+				alertStage.show();
+			}
+		});
+
+		ContextMenu textTitleMenu = new ContextMenu();
+		MenuItem textTitleOpenMenuItem = new MenuItem("Open");
+		textTitleOpenMenuItem.setOnAction(event -> {
+			UserText selectedText = textTitleListView.getSelectionModel().getSelectedItem();
+			if (selectedText != null) {
+				try {
+					if (selectedText.readyToDisplay()) {
+						userTextInDisplay = selectedText;
+						pageFocusBox.setVisible(true);
+						cipherTextArea.setText(selectedText.getCipherText());
+						textTitleField.setText(selectedText.getTitle());
+						if (!subtitleBox.getChildren().contains(textTitleField)) {
+							subtitleBox.getChildren().add(textTitleField);
+						}
+						userPageSubtitleTitle.setText("Text Title: ");
+						this.currentCipher = selectedText.getCipherType();
+						cipherDropDown.setValue(selectedText.getCipherType());
+						userTitle.setText("Hi " + user.getName() + ". Encrypt and Decrypt Your Existing Text. ");
+						if (selectedText.getCipherType().equals("CaesarCipher")) {
+							cc = new CaesarCipher(selectedText.getCaeserKey());
+							caesarKeyField.setText(Integer.toString(selectedText.getCaeserKey()));
+						}
+					}
+				} catch (InvalidKeyException | ClassNotFoundException | NoSuchAlgorithmException
+						| NoSuchPaddingException | InvalidAlgorithmParameterException | IllegalBlockSizeException
+						| BadPaddingException | SQLException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				pageFocusBox.setVisible(true);
+
+			}
+		});
+
+		textTitleMenu.getItems().addAll(textTitleOpenMenuItem);
+		textTitleListView.setOnMouseClicked(event -> {
+			if (event.getButton() == MouseButton.SECONDARY) {
+				textTitleMenu.show(textTitleListView, event.getScreenX(), event.getScreenY());
+			}
+		});
+//		textTitleListView.
+
+		GridPane.setColumnSpan(userTitle, 8);
+		GridPane.setColumnSpan(headerButtonsBox, 8);
+		GridPane.setRowSpan(listviewBox, 8);
+		GridPane.setColumnSpan(subtitleBox, 7);
+		GridPane.setRowSpan(pageFocusBox, 7);
+		GridPane.setColumnSpan(pageFocusBox, 7);
+
+		userGrid.setVgap(4);
+		userGrid.setHgap(10);
+		userGrid.setPadding(new Insets(5, 5, 5, 5));
+		userGrid.add(userTitle, 0, 0);
+		userGrid.add(headerButtonsBox, 0, 1);
+		userGrid.add(listviewBox, 0, 2);
+		userGrid.add(subtitleBox, 1, 2);
+		userGrid.add(pageFocusBox, 1, 3);
+
+		double columnPercentageWidth = 95 / 8.0;
+		for (int i = 0; i < 8; i++) {
+			ColumnConstraints column = new ColumnConstraints();
+			column.setPercentWidth(columnPercentageWidth);
+			userGrid.getColumnConstraints().add(column);
+		}
+
+		double rowPercentageWidth = 80.0 / 8.0;
+		for (int i = 0; i < 12; i++) {
+			RowConstraints row = new RowConstraints();
+			row.setPercentHeight(rowPercentageWidth);
+			userGrid.getRowConstraints().add(row);
+		}
+
+	}
+
+	private void saveCaesarCipherTextToDB(String cipherText, String textTitle)
+			throws InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException,
+			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
+		int key = cc.getKey();
+		String keyString = Integer.toString(key);
+		String cipherType = "CaesarCipher";
+		byte[] encryptedKey = this.aesCipherForKey.encrypt(keyString);
+		byte[] encryptedCipherType = this.aesCipherForKey.encrypt(cipherType);
+		this.sumbitAllTextInfoToDB(textTitle, cipherText, encryptedKey, encryptedCipherType);
+	}
+
+	private void sumbitAllTextInfoToDB(String textTitle, String cipherText, byte[] encryptedKey,
+			byte[] encryptedCipherType) {
+		try {
+			// Register JDBC driver
+			Class.forName("com.mysql.cj.jdbc.Driver");
+			// Open a connection
+			System.out.println("Connecting to database...");
+			Connection connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
+			// Execute a query
+			byte[] passphrase = this.getPassphrase();
+
+			String sql = "INSERT INTO messages_info (user_id, message_title, message_content, message_key, message_type) VALUES (?, AES_ENCRYPT(?, ?), ?, ?, ?)";
+			if (userTextInDisplay != null) {
+				sql = "UPDATE messages_info SET user_id = ?, message_title = AES_ENCRYPT(?, ?), message_content = ?, message_key = ?, message_type = ? WHERE message_id = ?";
+			}
+			System.out.println("Creating prepared statement...");
+			PreparedStatement preparedStatement = connection.prepareStatement(sql);
+			preparedStatement.setInt(1, user.getId());
+			preparedStatement.setString(2, textTitle);
+			preparedStatement.setBytes(3, passphrase);
+			preparedStatement.setString(4, cipherText);
+			preparedStatement.setBytes(5, encryptedKey);
+			preparedStatement.setBytes(6, encryptedCipherType);
+			if (userTextInDisplay != null) {
+				preparedStatement.setInt(7, userTextInDisplay.getTextID());
+			}
+			preparedStatement.executeUpdate();
+			preparedStatement.close();
+			connection.close();
+
+			this.userPageSubtitleTitle.setText("Your cipher text has been saved to database");
+			this.pageFocusBox.setVisible(false);
+			this.userTextInDisplay = null;
+			textTitleListView.getItems().clear();
+			this.loadUserSavedTextTitleList();
+		} catch (ClassNotFoundException | SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+	}
+
+	private void loadUserSavedTextTitleList() throws ClassNotFoundException, SQLException {
+		Class.forName("com.mysql.cj.jdbc.Driver");
+		// Open a connection
+		System.out.println("Connecting to database...");
+		Connection connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
+		// Execute a query
+
+		byte[] passphrase = this.getPassphrase();
+
+		String sql = "SELECT message_id, user_id, AES_DECRYPT(message_title, ?) AS decrypted_title, message_content, message_key, message_type FROM messages_info WHERE user_id = ?;";
+		System.out.println("Creating prepared statement...");
+		PreparedStatement preparedStatement = connection.prepareStatement(sql);
+		preparedStatement.setBytes(1, passphrase);
+		preparedStatement.setInt(2, user.getId());
+		ResultSet resultSet = preparedStatement.executeQuery();
+
+		System.out.println("get texts titles...");
+		while (resultSet.next()) {
+			int textID = resultSet.getInt("message_id");
+			String textTitle = resultSet.getString("decrypted_title");
+			UserText userText = new UserText(textID, user.getId(), textTitle, this);
+			textTitleListView.getItems().add(userText);
+		}
+
+//		System.out.println(textTitleListView.getItems().isEmpty());
+
+		// Close external resources
+		resultSet.close();
+		preparedStatement.close();
+		connection.close();
+
+	}
+
 	private boolean authenticateLogin(String usernameInput, String passwordInput)
 			throws ClassNotFoundException, SQLException, InvalidKeyException, NoSuchAlgorithmException,
 			NoSuchPaddingException, InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
@@ -397,14 +848,13 @@ public class Main extends Application {
 		Class.forName("com.mysql.cj.jdbc.Driver");
 		// Open a connection
 		System.out.println("Connecting to database...");
-		connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
+		Connection connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
 		// Execute a query
 
 		byte[] passphrase = this.getPassphrase();
 
 		// for test
 		System.out.println("Checking username..." + usernameInput);
-//		`user_id`, `user_password`, `user_key`
 
 		String sql = "SELECT user_id, AES_DECRYPT(user_name, ?) AS decrypted_username, user_password, user_key FROM users_info WHERE user_name = AES_ENCRYPT(?, ?);";
 		System.out.println("Creating prepared statement...");
@@ -414,20 +864,15 @@ public class Main extends Application {
 		preparedStatement.setBytes(3, passphrase);
 		ResultSet resultSet = preparedStatement.executeQuery();
 
-		// for test
-//		System.out.println("resultnext..." + resultSet.next());
 		while (resultSet.next()) {
-			System.out.println("get data...");
+			System.out.println("get user data...");
 			int id = resultSet.getInt("user_id");
 			String username = resultSet.getString("decrypted_username");
 			byte[] encryptedPassword = resultSet.getBytes("user_password");
 			byte[] encryptedKey = resultSet.getBytes("user_key");
 
-			// for test
-			System.out.println("id..." + id);
-			System.out.println("username" + username);
-
 			if (this.checkPassword(passwordInput, encryptedPassword, encryptedKey)) {
+				user = new User(id, username, this);
 				return true;
 			}
 
@@ -481,7 +926,7 @@ public class Main extends Application {
 			Class.forName("com.mysql.cj.jdbc.Driver");
 			// Open a connection
 			System.out.println("Connecting to database...");
-			connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
+			Connection connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
 			// Execute a query
 			byte[] passphrase = this.getPassphrase();
 			String sql = "INSERT INTO users_info (user_name, user_password, user_key) VALUES (AES_ENCRYPT(?, ?), ?, ?)";
@@ -499,9 +944,6 @@ public class Main extends Application {
 			homepageBox.getChildren().add(registeredMessage);
 			root.setCenter(homepageBox);
 
-//			String sql = "INSERT INTO `users_info` (`user_name`, `user_password`, `user_key`)\n"
-//					+ "VALUES ( AES_ENCRYPT(\"" + passphrase + "\",\"" + username + "\" ), \"" + password + "\", \""
-//					+ key + "\"));";
 			preparedStatement.close();
 			connection.close();
 		} catch (ClassNotFoundException | SQLException e) {
@@ -511,7 +953,7 @@ public class Main extends Application {
 
 	}
 
-	private byte[] getPassphrase() {
+	byte[] getPassphrase() {
 		CaesarCipher cc = new CaesarCipher();
 		String filePath = "pp.bin";
 		try {
@@ -603,7 +1045,7 @@ public class Main extends Application {
 			Class.forName("com.mysql.cj.jdbc.Driver");
 			// Open a connection
 			System.out.println("Connecting to database...");
-			connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
+			Connection connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
 			// Execute a query
 			System.out.println("Creating statement...");
 			Statement statement = connection.createStatement();
@@ -630,35 +1072,53 @@ public class Main extends Application {
 		return true;
 	}
 
-//	private boolean checkPassword(String plainPassword, String hashedPassword) {
-//		return hashedPassword.equals(hashPassword(plainPassword));
-//	}
-
-	private void encryptRSA() {
+	private void getKeyFromFile() throws NoSuchAlgorithmException {
+		aesCipherForKey = new AES();
+		CaesarCipher cCipher = new CaesarCipher();
+		String filePath = "kk.bin";
 		try {
-			RSA rsa = new RSA(1024);
-			rsa.createKeys();
-			rsa.writeKeyToFile("KeyPair/publicKey", rsa.getPublicKey().getEncoded());
-			rsa.writeKeyToFile("KeyPair/privateKey", rsa.getPrivateKey().getEncoded());
-
-			PrivateKey privateKey = rsa.getPrivate("KeyPair/privateKey");
-			PublicKey publicKey = rsa.getPublic("KeyPair/publicKey");
-
-			if (new File("KeyPair/text.txt").exists()) {
-				rsa.encryptFile(rsa.getFileInBytes(new File("KeyPair/text.txt")),
-						new File("KeyPair/text_encrypted.txt"), privateKey);
-				rsa.decryptFile(rsa.getFileInBytes(new File("KeyPair/text_encrypted.txt")),
-						new File("KeyPair/text_decrypted.txt"), publicKey);
+			if (!Files.exists(Path.of(filePath))) {
+				Files.createFile(Path.of(filePath));
+				SecretKey secretkeyskey = aesCipherForKey.getSecretkey();
+				byte[] encryptedKeysKey = cCipher.binaryCipher(secretkeyskey.getEncoded());
+				Files.write(Path.of(filePath), encryptedKeysKey, StandardOpenOption.WRITE);
+				System.out.println("Data has been written to file: " + filePath);
 			} else {
-				System.out.println("Create a file text.txt under folder KeyPair");
+				byte[] encryptedKeysKey = Files.readAllBytes(Path.of(filePath));
+				byte[] decryptedKeysKey = cCipher.deBinaryCipher(encryptedKeysKey);
+				SecretKey secretkeyskey = new SecretKeySpec(decryptedKeysKey, 0, decryptedKeysKey.length, "AES");
+				aesCipherForKey.setSecretkey(secretkeyskey);
 			}
-
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
-
 	}
+
+//	private void encryptRSA() {
+//		try {
+//			RSA rsa = new RSA(1024);
+//			rsa.createKeys();
+//			rsa.writeKeyToFile("KeyPair/publicKey", rsa.getPublicKey().getEncoded());
+//			rsa.writeKeyToFile("KeyPair/privateKey", rsa.getPrivateKey().getEncoded());
+//
+//			PrivateKey privateKey = rsa.getPrivate("KeyPair/privateKey");
+//			PublicKey publicKey = rsa.getPublic("KeyPair/publicKey");
+//
+//			if (new File("KeyPair/text.txt").exists()) {
+//				rsa.encryptFile(rsa.getFileInBytes(new File("KeyPair/text.txt")),
+//						new File("KeyPair/text_encrypted.txt"), privateKey);
+//				rsa.decryptFile(rsa.getFileInBytes(new File("KeyPair/text_encrypted.txt")),
+//						new File("KeyPair/text_decrypted.txt"), publicKey);
+//			} else {
+//				System.out.println("Create a file text.txt under folder KeyPair");
+//			}
+//
+//		} catch (Exception e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+//
+//	}
 
 	private String encryptedDESText(String plainStr) {
 		try {

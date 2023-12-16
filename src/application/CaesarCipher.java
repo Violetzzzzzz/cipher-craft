@@ -9,6 +9,14 @@ import java.io.IOException;
 class CaesarCipher {
 	int key;
 
+	protected int getKey() {
+		return key;
+	}
+
+	protected void setKey(int key) {
+		this.key = key;
+	}
+
 	public CaesarCipher() {
 		key = 3;
 	}
@@ -55,6 +63,30 @@ class CaesarCipher {
 		return decryptedBytes;
 	}
 
+	protected String encryptString(String plainText, int key) {
+		String cipherText = "";
+		for (int i = 0; i < plainText.length(); i++) {
+			char encryptedChar = encrypt(plainText.charAt(i), key);
+			cipherText = cipherText + encryptedChar;
+		}
+		System.out.println("String encrypted successfully.");
+		System.out.println("Plain text: " + plainText);
+		System.out.println("Cipher text: " + cipherText);
+		return cipherText;
+	}
+
+	protected String decryptString(String cipherText, int key) {
+		String plainText = "";
+		for (int i = 0; i < cipherText.length(); i++) {
+			char decryptedChar = decrypt(cipherText.charAt(i), key);
+			plainText = plainText + decryptedChar;
+		}
+		System.out.println("String decrypted successfully.");
+		System.out.println("Cipher text: " + cipherText);
+		System.out.println("Plain text: " + plainText);
+		return plainText;
+	}
+
 	private void encryptFile(String filePath, int key) {
 		try (BufferedReader reader = new BufferedReader(new FileReader(filePath));
 				BufferedWriter writer = new BufferedWriter(new FileWriter(filePath + ".encrypted"))) {
@@ -97,8 +129,6 @@ class CaesarCipher {
 			} else {
 				base = 'A';
 			}
-			System.out.print("base" + base);
-			System.out.print("c-base" + (c - base));
 			return (char) ((((c - base) + key) % 26) + base);
 		}
 		return c;
