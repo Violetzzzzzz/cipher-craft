@@ -16,33 +16,30 @@ import javax.crypto.spec.SecretKeySpec;
 class DES {
 	private SecretKey secretkey;
 
-	public DES() throws NoSuchAlgorithmException {
+	protected DES() throws NoSuchAlgorithmException {
 		generateKey();
 	}
 
-	/**
-	 * Step 1. Generate a DES key using KeyGenerator
-	 */
-
-	public void generateKey() throws NoSuchAlgorithmException {
+	protected void generateKey() throws NoSuchAlgorithmException {
 		KeyGenerator keyGen = KeyGenerator.getInstance("DES");
 		this.setSecretkey(keyGen.generateKey());
 	}
 
-	public byte[] encryptString(String strDataToEncrypt) throws NoSuchAlgorithmException, NoSuchPaddingException,
-			InvalidKeyException, InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
-		Cipher desCipher = Cipher.getInstance("DES"); // Must specify the mode explicitly as most JCE providers default
-														// to ECB mode!!
+	protected byte[] encryptStringToBytes(String strDataToEncrypt)
+			throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
+			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
+		Cipher desCipher = Cipher.getInstance("DES");
+
 		desCipher.init(Cipher.ENCRYPT_MODE, this.getSecretkey());
 		byte[] byteDataToEncrypt = strDataToEncrypt.getBytes();
 		byte[] byteCipherText = desCipher.doFinal(byteDataToEncrypt);
 		return byteCipherText;
 	}
 
-	public String decrypt(byte[] strCipherText) throws NoSuchAlgorithmException, NoSuchPaddingException,
+	protected String decryptBytesToString(byte[] strCipherText) throws NoSuchAlgorithmException, NoSuchPaddingException,
 			InvalidKeyException, InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
-		Cipher desCipher = Cipher.getInstance("DES"); // Must specify the mode explicitly as most JCE providers default
-														// to ECB mode!!
+		Cipher desCipher = Cipher.getInstance("DES");
+
 		desCipher.init(Cipher.DECRYPT_MODE, this.getSecretkey());
 		byte[] byteDecryptedText = desCipher.doFinal(strCipherText);
 		return new String(byteDecryptedText);
@@ -51,24 +48,24 @@ class DES {
 	/**
 	 * @return the secretkey
 	 */
-	public SecretKey getSecretkey() {
+	protected SecretKey getSecretkey() {
 		return secretkey;
 	}
 
 	/**
 	 * @param secretkey the secretkey to set
 	 */
-	public void setSecretkey(SecretKey secretkey) {
+	protected void setSecretkey(SecretKey secretkey) {
 		this.secretkey = secretkey;
 	}
 
-	public String secretKeyToString() {
+	protected String secretKeyToString() {
 		byte[] encodedKey = this.secretkey.getEncoded();
 		String encodedKeyString = Base64.getEncoder().encodeToString(encodedKey);
 		return encodedKeyString;
 	}
 
-	public SecretKey stringToSecretKey(String encodedKeyString) {
+	protected SecretKey stringToSecretKey(String encodedKeyString) {
 		byte[] decodedKey = Base64.getDecoder().decode(encodedKeyString);
 		SecretKey secretKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "DES");
 		return secretKey;

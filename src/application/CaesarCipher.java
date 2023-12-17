@@ -1,11 +1,5 @@
 package application;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-
 class CaesarCipher {
 	int key;
 
@@ -17,32 +11,13 @@ class CaesarCipher {
 		this.key = key;
 	}
 
-	public CaesarCipher() {
+	protected CaesarCipher() {
 		key = 3;
 	}
 
-	public CaesarCipher(int key) {
+	protected CaesarCipher(int key) {
 		this.key = key;
 	}
-
-//	public static void main(String[] args) {
-//		Scanner scanner = new Scanner(System.in);
-//
-//		System.out.println("Enter the key (shift value) for the Caesar Cipher:");
-//		int key = scanner.nextInt();
-//		scanner.nextLine();
-//
-//		System.out.println("Enter the path of the file to encrypt:");
-//		String filePath = scanner.nextLine();
-//
-//		// Encrypt the file
-//		encryptFile(filePath, key);
-//
-//		// Decrypt the file
-//		decryptFile(filePath + ".encrypted", key);
-//
-//		scanner.close();
-//	}
 
 	protected byte[] binaryCipher(byte[] bytes) {
 		byte[] encryptedBytes = new byte[bytes.length];
@@ -85,40 +60,6 @@ class CaesarCipher {
 		System.out.println("Cipher text: " + cipherText);
 		System.out.println("Plain text: " + plainText);
 		return plainText;
-	}
-
-	private void encryptFile(String filePath, int key) {
-		try (BufferedReader reader = new BufferedReader(new FileReader(filePath));
-				BufferedWriter writer = new BufferedWriter(new FileWriter(filePath + ".encrypted"))) {
-
-			int currentChar;
-			while ((currentChar = reader.read()) != -1) {
-				char encryptedChar = encrypt((char) currentChar, key);
-				writer.write(encryptedChar);
-			}
-
-			System.out.println("File encrypted successfully.");
-
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-
-	private void decryptFile(String filePath, int key) {
-		try (BufferedReader reader = new BufferedReader(new FileReader(filePath));
-				BufferedWriter writer = new BufferedWriter(new FileWriter(filePath + ".decrypted"))) {
-
-			int currentChar;
-			while ((currentChar = reader.read()) != -1) {
-				char decryptedChar = decrypt((char) currentChar, key);
-				writer.write(decryptedChar);
-			}
-
-			System.out.println("File decrypted successfully.");
-
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 	}
 
 	private char encrypt(char c, int key) {

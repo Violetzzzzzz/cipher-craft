@@ -1,5 +1,12 @@
 package application;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,6 +22,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Base64;
 
 import javax.crypto.BadPaddingException;
@@ -25,12 +33,14 @@ import javax.crypto.spec.SecretKeySpec;
 
 import javafx.application.Application;
 import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
@@ -49,6 +59,8 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.RowConstraints;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.stage.DirectoryChooser;
+import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
@@ -56,16 +68,21 @@ public class Main extends Application {
 	static final String JDBC_URL = "jdbc:mysql://database-violetsassignment.cwiyapmmjmbk.ap-southeast-2.rds.amazonaws.com:3306/db_assignment";
 	static final String USERNAME = "admin";
 	static final String PASSWORD = "qazxswedc";
-//	Connection connection;
+
 	User user;
 	Stage primaryStage;
 	Stage alertStage;
+	Stage settingStage;
+	Stage fileChooserStage;
 	Scene scene;
 	Scene userScene;
 	Scene alertScene;
+	Scene settingScene;
+
 	BorderPane root = new BorderPane();
 	BorderPane userroot = new BorderPane();
 	BorderPane alertroot = new BorderPane();
+	BorderPane settingroot = new BorderPane();
 
 	VBox homepageBox;
 	GridPane registerGrid;
@@ -76,19 +93,21 @@ public class Main extends Application {
 	HBox pageFocusBox;
 	Label userTitle;
 
-	CaesarCipher cc;
+	CaesarCipher currentCC;
+	DES currentDES;
+	AES currentAES;
 	UserText userTextInDisplay;
 	String currentCipher;
 	String textNameForSaving;
 	String cipherTextForSaving;
 
+	ArrayList<Button> buttons = new ArrayList<Button>();
+
 	String btnTextColor = "#003366";
-	String bgColor = "#CCCCCC";
+
+	String defaultBtnColor = "#003366";
 
 	AES aesCipherForKey;
-
-//	List<Button> buttonList = new ArrayList<>();
-//	List<Label> pageTitles = new ArrayList<>();
 
 	@Override
 	public void start(Stage primaryStage) {
@@ -103,9 +122,16 @@ public class Main extends Application {
 			// set pages layout
 			this.setHomePage();
 			this.setAlertStage();
+			this.setFileChooserStage();
+			this.setSettingStage();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+	}
+
+	private void setFileChooserStage() {
+		fileChooserStage = new Stage();
+		fileChooserStage.initModality(Modality.APPLICATION_MODAL);
 	}
 
 	private void setAlertStage() {
@@ -115,6 +141,58 @@ public class Main extends Application {
 		alertScene = new Scene(alertroot, 200, 150);
 		alertStage.setScene(alertScene);
 		alertStage.initModality(Modality.APPLICATION_MODAL);
+	}
+
+	private void setSettingStage() {
+		settingStage = new Stage();
+		settingStage.setAlwaysOnTop(true);
+		settingStage.setTitle("Setting");
+		settingScene = new Scene(settingroot, 300, 150);
+		settingStage.setScene(settingScene);
+		settingStage.initModality(Modality.APPLICATION_MODAL);
+
+		Label cipherLable = new Label("Prefer Cipher: ");
+		ObservableList<String> options = FXCollections.observableArrayList("CaesarCipher", "DES", "AES");
+		ComboBox<String> preferCipherComboBox = new ComboBox<String>(options);
+		Label colorLable = new Label("Button Color: ");
+		ColorPicker preferColorPicker = new ColorPicker();
+		preferColorPicker.setValue(Color.BLACK);
+		Button saveButton = new Button();
+		saveButton.setText("Save");
+		saveButton.setOnAction(action -> {
+			String cipherName = preferCipherComboBox.getValue();
+			String preferColor = "#" + preferColorPicker.getValue().toString().substring(2, 8);
+			if (cipherName != null) {
+				user.setPreferCipher(cipherName);
+				System.out.println(cipherName);
+			}
+			if (preferColor != null) {
+				user.setPreferColor(preferColor);
+				this.btnTextColor = preferColor;
+				System.out.println(preferColor);
+				this.refreshButtons();
+			}
+			settingStage.close();
+		});
+
+		GridPane settingGrid = new GridPane();
+		GridPane.setColumnSpan(saveButton, 2);
+		settingGrid.setVgap(4);
+		settingGrid.setHgap(10);
+		settingGrid.setPadding(new Insets(5, 5, 5, 5));
+		settingGrid.add(colorLable, 0, 0);
+		settingGrid.add(preferColorPicker, 1, 0);
+		settingGrid.add(cipherLable, 0, 2);
+		settingGrid.add(preferCipherComboBox, 1, 2);
+		settingGrid.add(saveButton, 0, 4);
+		settingroot.setCenter(settingGrid);
+
+	}
+
+	protected void refreshButtons() {
+		for (Button btn : buttons) {
+			this.setButtonStyle(btn);
+		}
 	}
 
 	private void handleMouseClick(MouseEvent event) {
@@ -134,7 +212,7 @@ public class Main extends Application {
 	}
 
 	private void setTitleLabelStyle(Label lb) {
-		lb.setStyle("-fx-font-size: 24px; " + "-fx-font-family: 'Arial'; " + "-fx-text-fill: blue; "
+		lb.setStyle("-fx-font-size: 24px; " + "-fx-font-family: 'Arial'; " + "-fx-text-fill: black; "
 				+ "-fx-font-weight: bold;");
 		lb.setWrapText(true);
 	}
@@ -158,6 +236,7 @@ public class Main extends Application {
 
 		Button loginButton = new Button("Login");
 		this.setButtonStyle(loginButton);
+		buttons.add(loginButton);
 		loginButton.setOnAction(action -> {
 			this.setLoginPage();
 			root.setCenter(loginGrid);
@@ -166,6 +245,7 @@ public class Main extends Application {
 
 		Button registerButton = new Button("Register");
 		this.setButtonStyle(registerButton);
+		buttons.add(registerButton);
 		registerButton.setOnAction(action -> {
 			this.setRegisterPage();
 			root.setCenter(registerGrid);
@@ -229,6 +309,7 @@ public class Main extends Application {
 		loginTip.setMaxWidth(220);
 
 		Button loginButton = new Button("Login");
+		buttons.add(loginButton);
 		this.setButtonStyle(loginButton);
 		loginButton.setOnAction(action -> {
 			String usernameInput = usernameTextField.getText().trim();
@@ -245,6 +326,7 @@ public class Main extends Application {
 							this.primaryStage.setScene(userScene);
 							textTitleListView.getItems().clear();
 							this.loadUserSavedTextTitleList();
+							user.loadSetting();
 						} else {
 							loginTip.setText("Username and password don't match. \nPlease try again.");
 							loginTip.setTextFill(Color.RED);
@@ -263,6 +345,7 @@ public class Main extends Application {
 		});
 
 		Button backButton = new Button("Back");
+		buttons.add(backButton);
 		this.setButtonStyle(backButton);
 		backButton.setOnAction(action -> {
 			root.setCenter(homepageBox);
@@ -356,6 +439,7 @@ public class Main extends Application {
 		Label submitTip = new Label();
 		Button sumbitButton = new Button("Submit");
 		this.setButtonStyle(sumbitButton);
+		buttons.add(sumbitButton);
 		sumbitButton.setOnAction(action -> {
 			GridPane.setColumnSpan(submitTip, 2);
 			String usernameInput = usernameTextField.getText().trim();
@@ -392,6 +476,7 @@ public class Main extends Application {
 
 		Button backButton = new Button("Back");
 		this.setButtonStyle(backButton);
+		buttons.add(backButton);
 		backButton.setOnAction(action -> {
 			root.setCenter(homepageBox);
 			homepageBox.requestFocus();
@@ -432,36 +517,45 @@ public class Main extends Application {
 
 		Button settingButton = new Button("Settings");
 		this.setButtonStyle(settingButton);
+		buttons.add(settingButton);
+		settingButton.setOnAction(action -> {
+			settingStage.show();
+		});
 
 		Button logoutButton = new Button("Log out");
 		this.setButtonStyle(logoutButton);
+		buttons.add(logoutButton);
 		logoutButton.setOnAction(action -> {
 			root.setCenter(homepageBox);
 			homepageBox.requestFocus();
 			user = null;
 			this.primaryStage.setScene(scene);
+			this.btnTextColor = this.defaultBtnColor;
+			this.refreshButtons();
 		});
 
 		Button newTextButton = new Button("New Text");
+		buttons.add(newTextButton);
 		this.setButtonStyle(newTextButton);
 
 		Button fileTextButton = new Button("Load Text From File");
+		buttons.add(fileTextButton);
 		this.setButtonStyle(fileTextButton);
 
-		Label listviewTitle = new Label("Your Texts: ");
+		Label listviewTitle = new Label("Your Texts(right click to operate): ");
 		this.setBodyLabelStyle(listviewTitle);
+		listviewTitle.setMaxWidth(140);
 		textTitleListView.setMaxWidth(140);
 		textTitleListView.setPrefHeight(470);
 
 		this.userPageSubtitleTitle = new Label("Start with New Text or Choose One From Sidebar");
 		this.userPageSubtitleTitle.setStyle("-fx-font-size: 20px; " + "-fx-font-family: 'Arial'; "
-				+ "-fx-text-fill: blue; " + "-fx-font-weight: bold;");
+				+ "-fx-text-fill: black; " + "-fx-font-weight: bold;");
 
 		TextField textTitleField = new TextField();
 		textTitleField.setMaxWidth(200);
 
 		Label plainTextTitle = new Label("Plain Text: ");
-		plainTextTitle.setWrapText(true);
 		plainTextTitle.setMaxWidth(420);
 		this.setBodyLabelStyle(plainTextTitle);
 
@@ -471,7 +565,6 @@ public class Main extends Application {
 		plainTextArea.setPrefHeight(400);
 
 		Label cipherTextTitle = new Label("Cipher Text: ");
-		cipherTextTitle.setWrapText(true);
 		cipherTextTitle.setMaxWidth(420);
 		this.setBodyLabelStyle(cipherTextTitle);
 
@@ -482,7 +575,6 @@ public class Main extends Application {
 		cipherTextArea.setPrefHeight(400);
 
 		Label caesarKeyLabel = new Label("CaeserCipher Key: ");
-		caesarKeyLabel.setWrapText(true);
 		caesarKeyLabel.setMaxWidth(140);
 		caesarKeyLabel.setVisible(false);
 		this.setBodyLabelStyle(caesarKeyLabel);
@@ -500,12 +592,11 @@ public class Main extends Application {
 		}));
 
 		Label cipherTypeLabel = new Label("Choose Cipher Type:");
-		cipherTypeLabel.setWrapText(true);
 		cipherTypeLabel.setMaxWidth(140);
 		this.setBodyLabelStyle(cipherTypeLabel);
 
 		ComboBox<String> cipherDropDown = new ComboBox<>();
-		cipherDropDown.setItems(FXCollections.observableArrayList("CaesarCipher", "DES", "AES", "RSA"));
+		cipherDropDown.setItems(FXCollections.observableArrayList("CaesarCipher", "DES", "AES"));
 		cipherDropDown.setPrefWidth(140);
 		cipherDropDown.setValue(user.getPreferCipher());
 		cipherDropDown.setOnAction(event -> {
@@ -515,17 +606,29 @@ public class Main extends Application {
 				caesarKeyLabel.setVisible(true);
 				caesarKeyField.setVisible(true);
 				caesarKeyField.setEditable(true);
+				if (currentCipher != null) {
+					if (currentCipher.equals("CaesarCipher")) {
+						caesarKeyField.setText(Integer.toString(currentCC.getKey()));
+					} else {
+						caesarKeyField.clear();
+					}
+				} else {
+					caesarKeyField.clear();
+				}
 			} else {
+				caesarKeyField.clear();
 				caesarKeyLabel.setVisible(false);
 				caesarKeyField.setVisible(false);
 			}
 		});
 
 		Button encryptButton = new Button("Encrypt ->");
+		buttons.add(encryptButton);
 		this.setButtonStyle(encryptButton);
 		encryptButton.setPrefWidth(140);
 		Button decryptButton = new Button("<- Decrypt");
 		this.setButtonStyle(decryptButton);
+		buttons.add(decryptButton);
 		decryptButton.setPrefWidth(140);
 
 		Label errorMessage = new Label();
@@ -534,17 +637,17 @@ public class Main extends Application {
 		errorMessage.setTextFill(Color.RED);
 
 		Button saveButton = new Button("Save Cipher Text to Database");
+		buttons.add(saveButton);
 		this.setButtonStyle(saveButton);
 		Button exportCipherTextButton = new Button("Export Cipher Text to File");
+		buttons.add(exportCipherTextButton);
 		this.setButtonStyle(exportCipherTextButton);
 		exportCipherTextButton.setMinWidth(200);
-		Button exportPlainTextButton = new Button("Export Plain Text to File");
-		this.setButtonStyle(exportPlainTextButton);
 
 		HBox headerButtonsBox = new HBox(12);
 		headerButtonsBox.setAlignment(Pos.CENTER);
-		headerButtonsBox.getChildren().addAll(newTextButton, fileTextButton, saveButton, exportPlainTextButton,
-				exportCipherTextButton, settingButton, logoutButton);
+		headerButtonsBox.getChildren().addAll(newTextButton, fileTextButton, saveButton, exportCipherTextButton,
+				settingButton, logoutButton);
 		this.setLayoutBorderStyle(headerButtonsBox);
 		headerButtonsBox.setStyle("-fx-border-color: black; -fx-border-width: 0 0 2 0;");
 
@@ -585,17 +688,166 @@ public class Main extends Application {
 			userTitle.setText("Hi " + user.getName() + ". Encrypt and Decrypt New Text");
 			pageFocusBox.setVisible(true);
 			userPageSubtitleTitle.setText("Text Title: ");
-			subtitleBox.getChildren().add(textTitleField);
+			if (!subtitleBox.getChildren().contains(textTitleField)) {
+				subtitleBox.getChildren().add(textTitleField);
+			}
 			userTextInDisplay = null;
+			currentAES = null;
+			currentCC = null;
+			currentDES = null;
+			currentCipher = null;
+			textTitleField.clear();
+			plainTextArea.clear();
+			cipherTextArea.clear();
+			cipherDropDown.setValue(user.getPreferCipher());
 		});
 
-		encryptButton.setOnAction(action -> {
+		fileTextButton.setOnAction(action -> {
+			userTitle.setText("Hi " + user.getName() + ". Encrypt and Decrypt File Text");
+			FileChooser fileChooser = new FileChooser();
+			fileChooser.setTitle("Open Resource File");
+			File selectedFile = fileChooser.showOpenDialog(fileChooserStage);
+			if (selectedFile != null) {
+				try (BufferedReader reader = new BufferedReader(new FileReader(selectedFile))) {
+					String fileName = selectedFile.getName();
+					String fileContent;
+					StringBuilder stringBuilder = new StringBuilder();
+					String line;
+					while ((line = reader.readLine()) != null) {
+						stringBuilder.append(line).append(System.lineSeparator());
+					}
+					fileContent = stringBuilder.toString();
+					if (fileName.toLowerCase().contains("encrypted")) {
+						errorMessage.setText("Please choose a key file.");
+						alertroot.setCenter(errorMessage);
+						alertStage.show();
+						FileChooser keyChooser = new FileChooser();
+						fileChooser.setTitle("Open Key File");
+						File selectedKey = keyChooser.showOpenDialog(fileChooserStage);
+						if (selectedKey != null) {
+							String keyFileName = selectedKey.getName();
+							if (fileName.toLowerCase().startsWith("aes_encrypted") && keyFileName.contains("key")
+									&& keyFileName.contains(fileName) && keyFileName.toLowerCase().contains("aes")) {
+								try (FileInputStream fis = new FileInputStream(selectedKey)) {
+									byte[] keyBytes = fis.readAllBytes();
+									SecretKey aesKey = new SecretKeySpec(keyBytes, 0, keyBytes.length, "AES");
+									currentAES = new AES();
+									currentAES.setSecretkey(aesKey);
+									currentCipher = "AES";
+									cipherDropDown.setValue("AES");
+									cipherTextArea.setText(fileContent);
+									plainTextArea.clear();
+									pageFocusBox.setVisible(true);
+									userPageSubtitleTitle.setText("File Name: ");
+									if (!subtitleBox.getChildren().contains(textTitleField)) {
+										subtitleBox.getChildren().add(textTitleField);
+									}
+									textTitleField.setText(fileName);
+									currentCC = null;
+									currentDES = null;
+									userTextInDisplay = null;
+								} catch (NoSuchAlgorithmException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+							} else if (fileName.toLowerCase().startsWith("des_encrypted") && keyFileName.contains("key")
+									&& keyFileName.contains(fileName) && keyFileName.toLowerCase().contains("des")) {
+								try (FileInputStream fis = new FileInputStream(selectedKey)) {
+									byte[] keyBytes = fis.readAllBytes();
+									SecretKey desKey = new SecretKeySpec(keyBytes, 0, keyBytes.length, "DES");
+									currentDES = new DES();
+									currentDES.setSecretkey(desKey);
+									currentCipher = "DES";
+									cipherDropDown.setValue("DES");
+									cipherTextArea.setText(fileContent);
+									plainTextArea.clear();
+									pageFocusBox.setVisible(true);
+									userPageSubtitleTitle.setText("File Name: ");
+									if (!subtitleBox.getChildren().contains(textTitleField)) {
+										subtitleBox.getChildren().add(textTitleField);
+									}
+									textTitleField.setText(fileName);
+									currentAES = null;
+									currentCC = null;
+									userTextInDisplay = null;
+								} catch (NoSuchAlgorithmException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+							} else if (fileName.toLowerCase().startsWith("caesarcipher_encrypted")
+									&& keyFileName.contains("key") && keyFileName.contains(fileName)
+									&& keyFileName.toLowerCase().contains("caesar")) {
+								try (BufferedReader keyReader = new BufferedReader(new FileReader(selectedKey))) {
+
+									String keyContent;
+									StringBuilder keyStringBuilder = new StringBuilder();
+									String keyline;
+									while ((keyline = keyReader.readLine()) != null) {
+										keyStringBuilder.append(keyline).append(System.lineSeparator());
+									}
+									keyContent = keyStringBuilder.toString().trim();
+									int ccKey = Integer.valueOf(keyContent);
+									currentCC = new CaesarCipher(ccKey);
+									currentCipher = "CaesarCipher";
+									cipherDropDown.setValue("CaesarCipher");
+									cipherTextArea.setText(fileContent);
+									plainTextArea.clear();
+									pageFocusBox.setVisible(true);
+									userPageSubtitleTitle.setText("File Name: ");
+									if (!subtitleBox.getChildren().contains(textTitleField)) {
+										subtitleBox.getChildren().add(textTitleField);
+									}
+									textTitleField.setText(fileName);
+									currentAES = null;
+									currentDES = null;
+									userTextInDisplay = null;
+								}
+							} else {
+								errorMessage.setText("Can't accept encrypted file without valid key.");
+								alertroot.setCenter(errorMessage);
+								alertStage.show();
+							}
+
+						} else {
+							errorMessage.setText("Can't accept encrypted file without key.");
+							alertroot.setCenter(errorMessage);
+							alertStage.show();
+						}
+					} else {
+						plainTextArea.setText(fileContent);
+						cipherTextArea.clear();
+						currentCipher = null;
+						cipherDropDown.setValue(user.getPreferCipher());
+						pageFocusBox.setVisible(true);
+						userPageSubtitleTitle.setText("File Name: ");
+						if (!subtitleBox.getChildren().contains(textTitleField)) {
+							subtitleBox.getChildren().add(textTitleField);
+						}
+						textTitleField.setText(fileName);
+						currentAES = null;
+						currentCC = null;
+						currentDES = null;
+						userTextInDisplay = null;
+					}
+
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+
+			}
+
+		});
+
+		encryptButton.setOnAction(action ->
+
+		{
 			String selectedCipherOption = cipherDropDown.getValue();
 			if (plainTextArea.getText().trim().isEmpty()) {
 				errorMessage.setText("Plain textarea cannot be empty");
 				alertroot.setCenter(errorMessage);
 				alertStage.show();
 			} else {
+				String plainText = plainTextArea.getText().trim();
 				if (selectedCipherOption.equals("CaesarCipher")) {
 					String keyString = caesarKeyField.getText().trim();
 					if (keyString.isEmpty()) {
@@ -603,13 +855,26 @@ public class Main extends Application {
 						alertroot.setCenter(errorMessage);
 						alertStage.show();
 					} else {
-						String plainText = plainTextArea.getText().trim();
 						int key = Integer.parseInt(keyString);
-						cc = new CaesarCipher(key);
-						String cipherText = cc.encryptString(plainText, key);
+						currentCC = new CaesarCipher(key);
+						String cipherText = currentCC.encryptString(plainText, key);
 						cipherTextArea.setText(cipherText);
 						currentCipher = "CaesarCipher";
+						currentAES = null;
+						currentDES = null;
 					}
+				} else if (selectedCipherOption.equals("DES")) {
+					String cipherText = this.encryptedDESText(plainText);
+					cipherTextArea.setText(cipherText);
+					currentCipher = "DES";
+					currentAES = null;
+					currentCC = null;
+				} else if (selectedCipherOption.equals("AES")) {
+					String cipherText = this.encryptedAESText(plainText);
+					cipherTextArea.setText(cipherText);
+					currentCipher = "AES";
+					currentDES = null;
+					currentCC = null;
 				}
 			}
 		});
@@ -618,14 +883,14 @@ public class Main extends Application {
 			String cipherText = cipherTextArea.getText().trim();
 			if (!cipherText.isEmpty()) {
 				if (currentCipher.equals("CaesarCipher")) {
-					String plainText = cc.decryptString(cipherText, cc.getKey());
+					String plainText = currentCC.decryptString(cipherText, currentCC.getKey());
 					plainTextArea.setText(plainText);
 				} else if (currentCipher.equals("AES")) {
-
+					String plainText = this.decryptedAESText(cipherText);
+					plainTextArea.setText(plainText);
 				} else if (currentCipher.equals("DES")) {
-
-				} else if (currentCipher.equals("RSA")) {
-
+					String plainText = this.decryptedDESText(cipherText);
+					plainTextArea.setText(plainText);
 				} else {
 					errorMessage.setText("Can't recognize cipher type.");
 					alertroot.setCenter(errorMessage);
@@ -640,9 +905,9 @@ public class Main extends Application {
 			if (!cipherText.isEmpty()) {
 				String textTitle = textTitleField.getText().trim();
 				if (!textTitle.isEmpty()) {
-					if (currentCipher.equals("CaesarCipher")) {
+					if (currentCipher != null) {
 						try {
-							this.saveCaesarCipherTextToDB(cipherText, textTitle);
+							this.saveCipherTextToDB(cipherText, textTitle);
 							subtitleBox.getChildren().remove(textTitleField);
 							cipherTextArea.clear();
 							plainTextArea.clear();
@@ -657,12 +922,6 @@ public class Main extends Application {
 							subtitleBox.getChildren().add(textTitleField);
 							e.printStackTrace();
 						}
-					} else if (currentCipher.equals("AES")) {
-
-					} else if (currentCipher.equals("DES")) {
-
-					} else if (currentCipher.equals("RSA")) {
-
 					} else {
 						errorMessage.setText("Can't recognize cipher type.");
 						alertroot.setCenter(errorMessage);
@@ -681,6 +940,83 @@ public class Main extends Application {
 			}
 		});
 
+		exportCipherTextButton.setOnAction(action -> {
+			String cipherText = cipherTextArea.getText().trim();
+			if (!cipherText.isEmpty()) {
+				String textTitle = textTitleField.getText().trim();
+				if (!textTitle.isEmpty()) {
+					if (currentCipher != null) {
+						DirectoryChooser directoryChooser = new DirectoryChooser();
+						directoryChooser.setTitle("Choose Directory to Save File");
+						File selectedDirectory = directoryChooser.showDialog(primaryStage);
+						if (selectedDirectory != null) {
+							File cipherFile = new File(selectedDirectory,
+									currentCipher + "_encrypted_" + textTitle + ".txt");
+							try (BufferedWriter writer = new BufferedWriter(new FileWriter(cipherFile))) {
+								writer.write(cipherText);
+								System.out.println("File created and written at: " + cipherFile.getAbsolutePath());
+							} catch (IOException e) {
+								e.printStackTrace();
+							}
+
+							if (currentCipher.equals("CaesarCipher")) {
+								File keyFile = new File(selectedDirectory, "key_" + cipherFile.getName());
+								int key = currentCC.getKey();
+								String keyString = Integer.toString(key);
+								try (BufferedWriter keywriter = new BufferedWriter(new FileWriter(keyFile))) {
+									keywriter.write(keyString);
+									System.out.println("Key File created and written at: " + keyFile.getAbsolutePath());
+								} catch (IOException e) {
+									e.printStackTrace();
+								}
+							} else if (currentCipher.equals("DES")) {
+								File keyFile = new File(selectedDirectory, "key_" + cipherFile.getName());
+								keyFile.getParentFile().mkdirs();
+								FileOutputStream fos;
+								try {
+									fos = new FileOutputStream(keyFile);
+									fos.write(currentDES.getSecretkey().getEncoded());
+									fos.flush();
+									fos.close();
+								} catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+
+							} else if (currentCipher.equals("AES")) {
+								File keyFile = new File(selectedDirectory, "key_" + cipherFile.getName());
+								keyFile.getParentFile().mkdirs();
+								FileOutputStream fos;
+								try {
+									fos = new FileOutputStream(keyFile);
+									fos.write(currentAES.getSecretkey().getEncoded());
+									fos.flush();
+									fos.close();
+								} catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+							}
+						}
+						userTitle.setText("Hi " + user.getName() + ". Text has been exported.");
+					} else {
+						errorMessage.setText("Can't recognize cipher type.");
+						alertroot.setCenter(errorMessage);
+						alertStage.show();
+						System.out.println("Lost current cipher type..." + currentCipher);
+					}
+				} else {
+					errorMessage.setText("Text title cannot be empty");
+					alertroot.setCenter(errorMessage);
+					alertStage.show();
+				}
+			} else {
+				errorMessage.setText("Cipher textarea cannot be empty");
+				alertroot.setCenter(errorMessage);
+				alertStage.show();
+			}
+		});
+
 		ContextMenu textTitleMenu = new ContextMenu();
 		MenuItem textTitleOpenMenuItem = new MenuItem("Open");
 		textTitleOpenMenuItem.setOnAction(event -> {
@@ -688,9 +1024,20 @@ public class Main extends Application {
 			if (selectedText != null) {
 				try {
 					if (selectedText.readyToDisplay()) {
+						if (selectedText.getCipherType().equals("CaesarCipher")) {
+							currentCC = new CaesarCipher(selectedText.getCaeserKey());
+							caesarKeyField.setText(Integer.toString(selectedText.getCaeserKey()));
+						} else if (selectedText.getCipherType().equals("DES")) {
+							currentDES = new DES();
+							currentDES.setSecretkey(selectedText.getSecretKey());
+						} else if (selectedText.getCipherType().equals("AES")) {
+							currentAES = new AES();
+							currentAES.setSecretkey(selectedText.getSecretKey());
+						}
 						userTextInDisplay = selectedText;
 						pageFocusBox.setVisible(true);
 						cipherTextArea.setText(selectedText.getCipherText());
+						plainTextArea.clear();
 						textTitleField.setText(selectedText.getTitle());
 						if (!subtitleBox.getChildren().contains(textTitleField)) {
 							subtitleBox.getChildren().add(textTitleField);
@@ -699,10 +1046,6 @@ public class Main extends Application {
 						this.currentCipher = selectedText.getCipherType();
 						cipherDropDown.setValue(selectedText.getCipherType());
 						userTitle.setText("Hi " + user.getName() + ". Encrypt and Decrypt Your Existing Text. ");
-						if (selectedText.getCipherType().equals("CaesarCipher")) {
-							cc = new CaesarCipher(selectedText.getCaeserKey());
-							caesarKeyField.setText(Integer.toString(selectedText.getCaeserKey()));
-						}
 					}
 				} catch (InvalidKeyException | ClassNotFoundException | NoSuchAlgorithmException
 						| NoSuchPaddingException | InvalidAlgorithmParameterException | IllegalBlockSizeException
@@ -721,7 +1064,6 @@ public class Main extends Application {
 				textTitleMenu.show(textTitleListView, event.getScreenX(), event.getScreenY());
 			}
 		});
-//		textTitleListView.
 
 		GridPane.setColumnSpan(userTitle, 8);
 		GridPane.setColumnSpan(headerButtonsBox, 8);
@@ -755,14 +1097,26 @@ public class Main extends Application {
 
 	}
 
-	private void saveCaesarCipherTextToDB(String cipherText, String textTitle)
+	private void saveCipherTextToDB(String cipherText, String textTitle)
 			throws InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException,
 			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
-		int key = cc.getKey();
-		String keyString = Integer.toString(key);
-		String cipherType = "CaesarCipher";
-		byte[] encryptedKey = this.aesCipherForKey.encrypt(keyString);
-		byte[] encryptedCipherType = this.aesCipherForKey.encrypt(cipherType);
+		byte[] encryptedKey = null;
+		byte[] encryptedCipherType = null;
+		if (currentCipher.equals("CaesarCipher")) {
+			int key = currentCC.getKey();
+			String keyString = Integer.toString(key);
+			encryptedKey = this.aesCipherForKey.encryptStringToBytes(keyString);
+			encryptedCipherType = this.aesCipherForKey.encryptStringToBytes(currentCipher);
+		} else if (currentCipher.equals("DES")) {
+			SecretKey desKey = currentDES.getSecretkey();
+			encryptedKey = this.aesCipherForKey.encryptedKey(desKey);
+			encryptedCipherType = this.aesCipherForKey.encryptStringToBytes(currentCipher);
+		} else if (currentCipher.equals("AES")) {
+			SecretKey aesKey = currentAES.getSecretkey();
+			encryptedKey = this.aesCipherForKey.encryptedKey(aesKey);
+			encryptedCipherType = this.aesCipherForKey.encryptStringToBytes(currentCipher);
+		}
+		System.out.println("message_key..." + encryptedKey);
 		this.sumbitAllTextInfoToDB(textTitle, cipherText, encryptedKey, encryptedCipherType);
 	}
 
@@ -782,6 +1136,8 @@ public class Main extends Application {
 				sql = "UPDATE messages_info SET user_id = ?, message_title = AES_ENCRYPT(?, ?), message_content = ?, message_key = ?, message_type = ? WHERE message_id = ?";
 			}
 			System.out.println("Creating prepared statement...");
+			System.out.println("message_key..." + encryptedKey);
+
 			PreparedStatement preparedStatement = connection.prepareStatement(sql);
 			preparedStatement.setInt(1, user.getId());
 			preparedStatement.setString(2, textTitle);
@@ -831,8 +1187,6 @@ public class Main extends Application {
 			UserText userText = new UserText(textID, user.getId(), textTitle, this);
 			textTitleListView.getItems().add(userText);
 		}
-
-//		System.out.println(textTitleListView.getItems().isEmpty());
 
 		// Close external resources
 		resultSet.close();
@@ -893,7 +1247,7 @@ public class Main extends Application {
 		DES des = new DES();
 		des.setSecretkey(secretKey);
 
-		String hashedPassword = des.decrypt(encryptedPassword);
+		String hashedPassword = des.decryptBytesToString(encryptedPassword);
 		String hashedPasswordInput = this.hashPassword(passwordInput);
 		if (hashedPassword.equals(hashedPasswordInput)) {
 			return true;
@@ -909,7 +1263,7 @@ public class Main extends Application {
 
 		// encrypt hashed password
 		DES des = new DES();
-		byte[] encryptedHashedPassword = des.encryptString(hashedPassword);
+		byte[] encryptedHashedPassword = des.encryptStringToBytes(hashedPassword);
 		System.out.println(
 				"The DES encrypted message 64: " + Base64.getEncoder().encodeToString(encryptedHashedPassword));
 
@@ -1094,37 +1448,42 @@ public class Main extends Application {
 		}
 	}
 
-//	private void encryptRSA() {
-//		try {
-//			RSA rsa = new RSA(1024);
-//			rsa.createKeys();
-//			rsa.writeKeyToFile("KeyPair/publicKey", rsa.getPublicKey().getEncoded());
-//			rsa.writeKeyToFile("KeyPair/privateKey", rsa.getPrivateKey().getEncoded());
-//
-//			PrivateKey privateKey = rsa.getPrivate("KeyPair/privateKey");
-//			PublicKey publicKey = rsa.getPublic("KeyPair/publicKey");
-//
-//			if (new File("KeyPair/text.txt").exists()) {
-//				rsa.encryptFile(rsa.getFileInBytes(new File("KeyPair/text.txt")),
-//						new File("KeyPair/text_encrypted.txt"), privateKey);
-//				rsa.decryptFile(rsa.getFileInBytes(new File("KeyPair/text_encrypted.txt")),
-//						new File("KeyPair/text_decrypted.txt"), publicKey);
-//			} else {
-//				System.out.println("Create a file text.txt under folder KeyPair");
-//			}
-//
-//		} catch (Exception e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-//
-//	}
+	private String encryptedAESText(String plainStr) {
+		try {
+			AES aes = new AES();
+			byte[] encText = aes.encryptStringToBytes(plainStr);
+			System.out.println("The AES encrypted message 64: " + Base64.getEncoder().encodeToString(encText));
+			currentAES = aes;
+			return Base64.getEncoder().encodeToString(encText);
+
+		} catch (Exception e) {
+			System.out.println("Error in AES: " + e);
+			e.printStackTrace();
+			return null;
+		}
+
+	}
+
+	private String decryptedAESText(String cipherStr) {
+		try {
+			byte[] encText = Base64.getDecoder().decode(cipherStr);
+			String plainText = currentAES.decryptBytesToString(encText);
+			System.out.println("The AES decrypted message: " + plainText);
+			return plainText;
+		} catch (Exception e) {
+			System.out.println("Error in AES: " + e);
+			e.printStackTrace();
+			return null;
+		}
+
+	}
 
 	private String encryptedDESText(String plainStr) {
 		try {
 			DES des = new DES();
-			byte[] encText = des.encryptString(plainStr);
+			byte[] encText = des.encryptStringToBytes(plainStr);
 			System.out.println("The DES encrypted message 64: " + Base64.getEncoder().encodeToString(encText));
+			currentDES = des;
 			return Base64.getEncoder().encodeToString(encText);
 
 		} catch (Exception e) {
@@ -1135,15 +1494,19 @@ public class Main extends Application {
 
 	}
 
-	private void decryptDES(byte[] encryptedText, String encodedKey)
-			throws NoSuchAlgorithmException, InvalidKeyException, NoSuchPaddingException,
-			InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
-		DES des = new DES();
-		byte[] decodedKey = Base64.getDecoder().decode(encodedKey);
-		des.setSecretkey(des.stringToSecretKey(encodedKey));
+	private String decryptedDESText(String cipherStr) {
+		try {
+			byte[] encText = Base64.getDecoder().decode(cipherStr);
+			String plainText = currentDES.decryptBytesToString(encText);
+			System.out.println("The DES decrypted message: " + plainText);
+			return plainText;
 
-		String decText = des.decrypt(encryptedText);
-		System.out.println("The DES decrypted message: " + decText);
+		} catch (Exception e) {
+			System.out.println("Error in DES: " + e);
+			e.printStackTrace();
+			return null;
+		}
+
 	}
 
 	public static void main(String[] args) {

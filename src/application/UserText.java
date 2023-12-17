@@ -25,7 +25,7 @@ class UserText {
 	private int caeserKey;
 	private Main main;
 
-	public UserText(int textID, int userID, String title, Main main) {
+	protected UserText(int textID, int userID, String title, Main main) {
 		this.textID = textID;
 		this.userID = userID;
 		this.title = title;
@@ -37,7 +37,7 @@ class UserText {
 		return title;
 	}
 
-	public boolean readyToDisplay()
+	protected boolean readyToDisplay()
 			throws ClassNotFoundException, SQLException, InvalidKeyException, NoSuchAlgorithmException,
 			NoSuchPaddingException, InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
 		if (cipherText == null) {
@@ -58,10 +58,15 @@ class UserText {
 				this.cipherText = resultSet.getString("message_content");
 				byte[] encryptedKey = resultSet.getBytes("message_key");
 				byte[] encryptedCipherType = resultSet.getBytes("message_type");
-				this.cipherType = main.aesCipherForKey.decrypt(encryptedCipherType);
+				this.cipherType = main.aesCipherForKey.decryptBytesToString(encryptedCipherType);
 				if (this.cipherType.equals("CaesarCipher")) {
-					String ccKey = main.aesCipherForKey.decrypt(encryptedKey);
+					String ccKey = main.aesCipherForKey.decryptBytesToString(encryptedKey);
 					this.caeserKey = Integer.valueOf(ccKey);
+					System.out.println("cckey..." + this.caeserKey);
+				} else if (this.cipherType.equals("DES")) {
+					this.secretKey = this.main.aesCipherForKey.decryptedKey(encryptedKey);
+				} else if (this.cipherType.equals("AES")) {
+					this.secretKey = this.main.aesCipherForKey.decryptedAESKey(encryptedKey);
 				}
 			}
 			// Close external resources
