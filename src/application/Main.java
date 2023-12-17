@@ -91,6 +91,7 @@ public class Main extends Application {
 	Label userPageSubtitleTitle;
 	HBox pageFocusBox;
 	Label userTitle;
+	Label registeredMessage;
 
 	CaesarCipher currentCC;
 	DES currentDES;
@@ -240,6 +241,7 @@ public class Main extends Application {
 			this.setLoginPage();
 			root.setCenter(loginGrid);
 			root.requestFocus();
+			homepageBox.getChildren().remove(registeredMessage);
 		});
 
 		Button registerButton = new Button("Register");
@@ -249,6 +251,7 @@ public class Main extends Application {
 			this.setRegisterPage();
 			root.setCenter(registerGrid);
 			root.requestFocus();
+			homepageBox.getChildren().remove(registeredMessage);
 		});
 
 		homepageBox.getChildren().addAll(homepageTitle, loginButton, registerButton);
@@ -1291,7 +1294,7 @@ public class Main extends Application {
 			preparedStatement.setBytes(4, key);
 			preparedStatement.executeUpdate();
 
-			Label registeredMessage = new Label("Your account has been created successfully!");
+			registeredMessage = new Label("Your account has been created successfully!");
 			registeredMessage.setStyle("-fx-font-size: 16px; " + "-fx-font-family: 'Arial'; " + "-fx-text-fill: green; "
 					+ "-fx-font-weight: bold;");
 			homepageBox.getChildren().add(registeredMessage);
