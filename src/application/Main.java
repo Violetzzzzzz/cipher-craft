@@ -21,7 +21,6 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Base64;
 
@@ -1385,7 +1384,7 @@ public class Main extends Application {
 			tipText = "Username cannot be empty. A valid username use only letters, numbers, or symbols (@, ., -, _), and have a length between 6 and 8 characters.";
 		} else if (!newUsername.matches(regex)) {
 			tipText = "Invalid username. A valid username use only letters, numbers, or symbols (@, ., -, _), and have a length between 6 and 8 characters.";
-		} else if (!this.dbUsernameTaken(newUsername)) {
+		} else if (this.dbUsernameTaken(newUsername)) {
 			tipText = "This username is already in use. A valid username use only letters, numbers, or symbols (@, ., -, _), and have a length between 6 and 8 characters.";
 		} else {
 			tipText = "Username is valid";
@@ -1402,28 +1401,22 @@ public class Main extends Application {
 			Connection connection = DriverManager.getConnection(JDBC_URL, USERNAME, PASSWORD);
 			// Execute a query
 			System.out.println("Creating statement...");
-			Statement statement = connection.createStatement();
 			byte[] passphrase = this.getPassphrase();
-
-			// for test
 			System.out.println("Checking username..." + newUsername);
-			String sql = "SELECT * FROM `users_info` WHERE AES_DECRYPT(`user_name`, \"" + passphrase + "\") = \""
-					+ newUsername + "\";";
+			String sql = "SELECT * FROM users_info WHERE AES_DECRYPT(user_name, ?) = ?;";
 
-			ResultSet resultSet = statement.executeQuery(sql);
+			System.out.println("Creating prepared statement...");
+			PreparedStatement preparedStatement = connection.prepareStatement(sql);
+			preparedStatement.setBytes(1, passphrase);
+			preparedStatement.setString(2, newUsername);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			return resultSet.next();
 
-			if (resultSet.next()) {
-				return false;
-			}
-			// Close external resources
-			resultSet.close();
-			statement.close();
-			connection.close();
 		} catch (ClassNotFoundException | SQLException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		return true;
+		return false;
 	}
 
 	private void getKeyFromFile() throws NoSuchAlgorithmException {
