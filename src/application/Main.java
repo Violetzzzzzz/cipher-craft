@@ -64,9 +64,9 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 public class Main extends Application {
-	static final String JDBC_URL = "jdbc:mysql://database-violetsassignment.cwiyapmmjmbk.ap-southeast-2.rds.amazonaws.com:3306/db_assignment";
+	static final String JDBC_URL = "";
 	static final String USERNAME = "admin";
-	static final String PASSWORD = "qazxswedc";
+	static final String PASSWORD = "";
 
 	User user;
 	Stage primaryStage;
